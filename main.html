@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panjiva Trade Explorer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  body { font-family: var(--font); font-size: 13px; }
+  [hidden], .hidden { display: none !important; }
+  .table-container::-webkit-scrollbar { width: 6px; height: 6px; }
+  .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  td, th { padding: 6px 10px !important; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* segmented controls */
+  .seg-group { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; }
+  .seg { padding: 2px 9px; background: #fff; color: #475569; font-weight: 600; font-size: 11px; border-right: 1px solid #e2e8f0; }
+  .seg:last-child { border-right: 0; }
+  .seg:hover { background: #f1f5f9; }
+  .seg.active { background: #0d9488; color: #fff; }
+  .sel { border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-size: 11px; background: #fff; color: #0f172a; }
+  .ctl-label { font-size: 10px; font-weight: 600; color: #64748b; margin-right: 4px; }
+
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+  .badge-imp { background: #e0f2fe; color: #0369a1; }
+  .badge-exp { background: #fef3c7; color: #b45309; }
+  .badge-unk { background: #e2e8f0; color: #475569; }
+
+  /* heatmap */
+  .hm-table { border-collapse: separate; border-spacing: 0; }
+  .hm-table th.pcol { font-size: 10px; font-weight: 600; color: #64748b; padding: 4px 3px !important; min-width: 46px; text-align: center; cursor: pointer; white-space: nowrap; }
+  .hm-table th.pcol:hover { color: #0d9488; }
+  .hm-table td.hm { min-width: 46px; height: 26px; text-align: center; font-size: 10.5px; padding: 2px 3px !important; cursor: pointer; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; font-variant-numeric: tabular-nums; }
+  .hm-table td.hm:hover { outline: 2px solid #0f172a; outline-offset: -2px; }
+  .hm-table td.hm.sel, .hm-table th.pcol.sel { outline: 2px solid #0d9488; outline-offset: -2px; }
+  .hm-table .gname { cursor: pointer; }
+  .hm-table .gname:hover { color: #0d9488; text-decoration: underline; }
+  .sticky-col { position: sticky; left: 0; background: #fff; z-index: 5; }
+  thead .sticky-col { z-index: 15; background: #f1f5f9; }
+  .period-row { cursor: pointer; }
+  .period-row.empty { color: #94a3b8; }
+  .clickable-row { cursor: pointer; }
+  .fl { display: flex; flex-direction: column; gap: 2px; }
+  .fl > span { font-size: 10px; font-weight: 600; color: #64748b; }
+  .inp { border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 7px; font-size: 11px; background: #fff; color: #0f172a; }
+  .inp:focus, .sel:focus { outline: 2px solid #5eead4; outline-offset: 0; }
+  .sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .sortable:hover { color: #0d9488; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: #ccfbf1; color: #115e59; font-size: 10.5px; font-weight: 600; padding: 1px 4px 1px 8px; border-radius: 999px; }
+  .chip button { width: 16px; height: 16px; border-radius: 999px; line-height: 14px; }
+  .chip button:hover { background: #99f6e4; }
+  .link { cursor: pointer; }
+  .link:hover { color: #0d9488; text-decoration: underline; }
+  #detTable td { vertical-align: top; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col antialiased">
+
+<header class="bg-slate-900 text-slate-100 px-4 py-2 flex items-center justify-between shadow-sm flex-wrap gap-3">
+  <div class="flex items-center space-x-3">
+    <div>
+      <h1 class="text-sm font-bold tracking-tight">Panjiva Trade Cabinet</h1>
+      <p id="folderLabel" class="text-[11px] text-slate-400">No folder loaded yet</p>
+    </div>
+    <div id="fileSelWrap" class="hidden flex items-center space-x-2 bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+      <label for="fileSel" class="text-[11px] font-semibold text-slate-300">Company:</label>
+      <select id="fileSel" class="bg-white text-slate-900 text-xs font-medium rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-500 max-w-xs"></select>
+    </div>
+  </div>
+  <div class="flex items-center space-x-2">
+    <button id="btnPick" class="bg-teal-600 hover:bg-teal-500 text-white px-3 py-1.5 rounded text-xs font-semibold shadow transition">📁 Choose folder</button>
+    <button id="btnReload" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded text-xs border border-slate-700 transition" disabled>🔄 Reload</button>
+    <input type="file" id="dirInput" webkitdirectory directory multiple class="hidden">
+  </div>
+</header>
+
+<div id="durationBanner" class="hidden bg-teal-900 text-teal-100 px-4 py-1.5 text-xs font-medium flex flex-wrap items-center justify-between gap-2 shadow-inner border-b border-teal-800">
+  <div class="flex items-center gap-2 flex-wrap">
+    <span class="bg-teal-700 text-teal-100 text-[10px] px-2 py-0.5 rounded font-bold">Report period</span>
+    <span id="reportDateRange">–</span>
+    <button id="latestNote" class="bg-teal-800 hover:bg-teal-700 text-teal-50 text-[10px] px-2 py-0.5 rounded font-semibold border border-teal-600" title="Show the latest period in the details table"></button>
+    <span id="dateFormatNote" class="text-[10px] text-teal-300"></span>
+    <span id="undatedWarn" class="hidden bg-amber-500 text-slate-900 text-[10px] px-2 py-0.5 rounded font-bold"></span>
+  </div>
+  <div id="reportSummaryCounts" class="text-[11px] opacity-90"></div>
+</div>
+
+<nav id="bar2" class="hidden bg-slate-800 text-slate-200 px-4 flex items-center justify-between shadow-inner h-10 overflow-x-auto">
+  <div class="flex space-x-1 h-full items-stretch">
+    <button class="tab-btn px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition" data-tab="overview">Overview & card</button>
+    <button class="tab-btn px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition" data-tab="timeline">Timeline & flow</button>
+    <button class="tab-btn px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition" data-tab="calendar">Goods × month</button>
+    <button class="tab-btn px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition" data-tab="compare">Import vs export</button>
+    <button class="tab-btn px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition" data-tab="shipments">Shipments</button>
+  </div>
+  <input type="text" id="globalSearch" placeholder="Filter everything (goods, partner, address)…" class="bg-slate-700 text-[11px] text-white px-2.5 py-1 rounded border border-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-400 w-56 ml-3">
+</nav>
+
+<div id="ctrlBar" class="hidden bg-white border-b border-slate-200 px-4 py-1.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+  <div class="flex items-center">
+    <span class="ctl-label">Time step</span>
+    <div class="seg-group" id="granGroup">
+      <button class="seg" data-gran="week">Week</button>
+      <button class="seg active" data-gran="month">Month</button>
+      <button class="seg" data-gran="quarter">Quarter</button>
+      <button class="seg" data-gran="year">Year</button>
+    </div>
+  </div>
+  <label class="flex items-center"><span class="ctl-label">Measure</span>
+    <select id="metricSel" class="sel">
+      <option value="count">Shipments</option>
+      <option value="weight">Weight (kg)</option>
+      <option value="containers">Containers</option>
+    </select>
+  </label>
+  <label class="flex items-center"><span class="ctl-label">Goods grouping</span>
+    <select id="groupSel" class="sel">
+      <option value="smart">Key words (groups similar descriptions)</option>
+      <option value="full">Full description</option>
+    </select>
+  </label>
+  <label class="flex items-center"><span class="ctl-label">Goods column</span>
+    <select id="goodsColSel" class="sel max-w-[180px]"></select>
+  </label>
+  <label class="flex items-center"><span class="ctl-label">Rows only mentioning the company</span>
+    <select id="mentionSel" class="sel" title="Rows where your search matched only text such as the goods description, not the shipper or consignee">
+      <option value="show">Count them (marked)</option>
+      <option value="hide">Leave them out</option>
+    </select>
+  </label>
+  <label class="flex items-center"><span class="ctl-label">Direction rule</span>
+    <select id="dirSel" class="sel">
+      <option value="auto">Auto: matched field / company name</option>
+      <option value="legacy">Consignee trade role contains "exporter"</option>
+    </select>
+  </label>
+</div>
+
+<main class="flex-1 p-4 max-w-7xl w-full mx-auto flex flex-col gap-3">
+
+  <div id="emptyState" class="my-auto text-center py-16 px-6 bg-white rounded-xl shadow-sm border border-slate-200 max-w-lg mx-auto">
+    <div class="text-teal-600 text-4xl mb-3">📦</div>
+    <h2 class="text-base font-bold text-slate-800 mb-1">Open your Panjiva shipment folder</h2>
+    <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+      Choose the folder with your Panjiva Excel exports. Dates are read whether they are Excel date cells or text, every month in the span is shown (including empty ones), and each shipment is split into import or export.
+    </p>
+    <button id="btnPick2" class="bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow transition">Choose folder</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <section id="tab-overview" class="tab-content hidden flex flex-col gap-3">
+    <div id="companyCard" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden text-xs"></div>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+        <span class="text-[10px] font-semibold text-slate-400">Total shipments</span>
+        <div id="statShipments" class="text-lg font-bold text-slate-800 mt-0.5 num">0</div>
+        <div id="statShipmentsSub" class="text-[10px] text-slate-400"></div>
+      </div>
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+        <span class="text-[10px] font-semibold text-slate-400">Total weight</span>
+        <div id="statWeight" class="text-lg font-bold text-teal-600 mt-0.5 num">0 kg</div>
+        <div id="statWeightSub" class="text-[10px] text-slate-400"></div>
+      </div>
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+        <span class="text-[10px] font-semibold text-slate-400">Imports (company is consignee)</span>
+        <div id="statImports" class="text-lg font-bold text-sky-600 mt-0.5 num">0</div>
+        <div id="statImportsSub" class="text-[10px] text-slate-400"></div>
+      </div>
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+        <span class="text-[10px] font-semibold text-slate-400">Exports (company is shipper)</span>
+        <div id="statExports" class="text-lg font-bold text-amber-600 mt-0.5 num">0</div>
+        <div id="statExportsSub" class="text-[10px] text-slate-400"></div>
+      </div>
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+        <span class="text-[10px] font-semibold text-slate-400">Direction unclear</span>
+        <div id="statUnknown" class="text-lg font-bold text-slate-500 mt-0.5 num">0</div>
+        <div id="statUnknownSub" class="text-[10px] text-slate-400"></div>
+      </div>
+    </div>
+
+    <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+      <div class="flex justify-between text-[11px] font-semibold mb-1">
+        <span class="text-sky-700" id="shareImpLabel">Imports</span>
+        <span class="text-slate-500" id="shareUnkLabel"></span>
+        <span class="text-amber-700" id="shareExpLabel">Exports</span>
+      </div>
+      <div id="shareBar" class="flex h-3 rounded overflow-hidden bg-slate-100"></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col">
+        <h3 class="text-xs font-bold text-slate-700 mb-2">Top trading partners, split by direction</h3>
+        <div class="relative flex-1 min-h-[260px]"><canvas id="chartPartners"></canvas></div>
+      </div>
+      <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col">
+        <h3 class="text-xs font-bold text-slate-700 mb-2" id="mirrorTitle">Imports above, exports below</h3>
+        <div class="relative flex-1 min-h-[260px]"><canvas id="chartMirror"></canvas></div>
+      </div>
+    </div>
+    <div id="routesCard" class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-col">
+      <h3 class="text-xs font-bold text-slate-700 mb-2">Top trade routes (from origin to destination)</h3>
+      <div class="relative flex-1 min-h-[260px]"><canvas id="chartRoutes"></canvas></div>
+    </div>
+  </section>
+
+  <!-- TIMELINE -->
+  <section id="tab-timeline" class="tab-content hidden flex flex-col gap-3">
+    <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <h3 class="text-xs font-bold text-slate-700" id="tlTitle">Shipments per month</h3>
+        <div class="seg-group" id="tlStyleGroup">
+          <button class="seg active" data-tl="stacked">Stacked</button>
+          <button class="seg" data-tl="grouped">Side by side</button>
+          <button class="seg" data-tl="mirror">Mirror</button>
+        </div>
+      </div>
+      <div class="relative h-[300px] w-full"><canvas id="chartTimeline"></canvas></div>
+      <p class="text-[10px] text-slate-400 mt-1">Every period between the first and last arrival is shown, so gaps with no trade appear as empty bars. The dark line is a 3-period moving average of the total.</p>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-xs font-bold text-slate-700">Period breakdown</h3>
+        <span class="text-[10px] text-slate-400">Click a row to see which goods moved that period, in which direction, with whom</span>
+      </div>
+      <div class="table-container overflow-auto max-h-[520px]">
+        <table id="periodTable" class="w-full text-left border-collapse text-xs">
+          <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
+            <tr>
+              <th class="font-semibold">Period</th>
+              <th class="font-semibold text-right text-sky-700">Imports</th>
+              <th class="font-semibold text-right text-amber-700">Exports</th>
+              <th class="font-semibold text-right text-slate-500">Unclear</th>
+              <th class="font-semibold text-right">Total</th>
+              <th class="font-semibold text-right">Weight</th>
+              <th class="font-semibold text-right">Containers</th>
+              <th class="font-semibold">Main goods</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 text-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- GOODS x MONTH -->
+  <section id="tab-calendar" class="tab-content hidden flex flex-col gap-3">
+    <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div>
+          <h3 class="text-xs font-bold text-slate-700" id="calTitle">Goods by month</h3>
+          <p class="text-[10px] text-slate-400">Click a cell for its shipments, a goods name for its full history, or a period header for everything in that period.</p>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="seg-group" id="calDirGroup">
+            <button class="seg active" data-caldir="all">Both</button>
+            <button class="seg" data-caldir="import">Imports</button>
+            <button class="seg" data-caldir="export">Exports</button>
+            <button class="seg" data-caldir="unknown">Unclear</button>
+          </div>
+          <label class="flex items-center"><span class="ctl-label">Show</span>
+            <select id="calTopSel" class="sel">
+              <option value="15">Top 15 goods</option>
+              <option value="25" selected>Top 25 goods</option>
+              <option value="50">Top 50 goods</option>
+              <option value="all">All goods</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-[10px] text-slate-500 mb-2">
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#0284c7"></span>Import</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#f59e0b"></span>Export</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-6 h-3 rounded-sm" style="background:linear-gradient(90deg,#0284c7 0 50%,#f59e0b 50% 100%)"></span>Both in the same period (split by share)</span>
+        <span>Darker means more.</span>
+      </div>
+      <div class="table-container overflow-auto max-h-[540px] border border-slate-100 rounded">
+        <table id="calTable" class="hm-table text-xs"></table>
+      </div>
+      <p id="calFootnote" class="text-[10px] text-slate-400 mt-1"></p>
+    </div>
+
+    <div id="calDetail" class="hidden bg-white rounded-lg border border-teal-300 shadow-sm overflow-hidden">
+      <div class="p-3 bg-teal-50 border-b border-teal-100 flex items-center justify-between gap-2">
+        <h3 class="text-xs font-bold text-slate-800" id="calDetailTitle"></h3>
+        <button id="calDetailClose" class="text-[11px] font-semibold text-slate-600 hover:text-slate-900 border border-slate-300 bg-white rounded px-2 py-0.5">Close</button>
+      </div>
+      <div class="table-container overflow-auto max-h-[400px]">
+        <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+          <thead class="bg-slate-100 text-slate-600 sticky top-0">
+            <tr><th>Date</th><th>Direction</th><th>Goods shipped</th><th>Trading partner</th><th>From → to</th><th class="text-right">Weight (kg)</th><th class="text-right">Containers</th></tr>
+          </thead>
+          <tbody id="calDetailBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMPORT VS EXPORT -->
+  <section id="tab-compare" class="tab-content hidden flex flex-col gap-3">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+      <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+        <h3 class="text-xs font-bold text-slate-700 mb-2">Side-by-side profile</h3>
+        <table class="w-full text-xs" id="compareStats">
+          <thead><tr class="border-b border-slate-200"><th></th><th class="text-right text-sky-700">Imports</th><th class="text-right text-amber-700">Exports</th></tr></thead>
+          <tbody class="divide-y divide-slate-100"></tbody>
+        </table>
+        <p id="compareNote" class="text-[10px] text-slate-400 mt-2"></p>
+      </div>
+      <div class="lg:col-span-3 bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col">
+        <h3 class="text-xs font-bold text-slate-700 mb-2">Top goods: imports to the left, exports to the right</h3>
+        <div class="relative flex-1 min-h-[340px]"><canvas id="chartButterfly"></canvas></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+      <h3 class="text-xs font-bold text-slate-700 mb-2" id="mixTitle">Import / export mix per period</h3>
+      <div class="relative h-[200px]"><canvas id="chartMix"></canvas></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-bold text-sky-700">📥 Imported goods</h3>
+          <span id="importGoodsCount" class="text-[10px] bg-sky-50 text-sky-700 px-2 py-0.5 rounded font-semibold">0</span>
+        </div>
+        <div class="table-container overflow-auto max-h-[400px]">
+          <table id="importGoodsTable" class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 sticky top-0"><tr><th>Goods</th><th class="text-right">Shipments</th><th class="text-right">Weight (kg)</th><th class="text-right">Active periods</th><th>First</th><th>Last</th></tr></thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-bold text-amber-700">📤 Exported goods</h3>
+          <span id="exportGoodsCount" class="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-semibold">0</span>
+        </div>
+        <div class="table-container overflow-auto max-h-[400px]">
+          <table id="exportGoodsTable" class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 sticky top-0"><tr><th>Goods</th><th class="text-right">Shipments</th><th class="text-right">Weight (kg)</th><th class="text-right">Active periods</th><th>First</th><th>Last</th></tr></thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <p class="text-[10px] text-slate-400">Click a goods row to open its month-by-month history in the Goods × month tab.</p>
+  </section>
+
+  <!-- SHIPMENTS -->
+  <section id="tab-shipments" class="tab-content hidden flex flex-col gap-3">
+    <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 class="text-xs font-bold text-slate-800">US imports shipments</h3>
+          <p id="shipCount" class="text-[11px] text-slate-500"></p>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <label class="flex items-center"><span class="ctl-label">Direction</span>
+            <select id="shipDirSel" class="sel">
+              <option value="all">Both</option>
+              <option value="import">Imports</option>
+              <option value="export">Exports</option>
+              <option value="unknown">Unclear</option>
+            </select>
+          </label>
+          <label class="flex items-center"><span class="ctl-label">Period</span>
+            <select id="shipPeriodSel" class="sel"></select>
+          </label>
+          <button id="exportCsv" class="bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded border border-slate-300 shadow-sm transition">Export CSV</button>
+        </div>
+      </div>
+      <div class="table-container overflow-auto max-h-[560px]">
+        <table id="shipmentsTable" class="w-full text-left border-collapse text-xs whitespace-nowrap">
+          <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10"></thead>
+          <tbody class="divide-y divide-slate-100 text-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- DETAILS BELOW PLOTS -->
+  <section id="detailSection" class="hidden">
+    <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-3 bg-slate-50 border-b border-slate-200">
+        <div class="flex items-start justify-between flex-wrap gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-slate-800">Goods and shipment details</h3>
+            <p id="detSummary" class="text-[11px] text-slate-500"></p>
+          </div>
+          <div class="flex gap-2">
+            <button id="detClear" class="bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded border border-slate-300">Clear filters</button>
+            <button id="detCsv" class="bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded border border-slate-300">Export these rows (CSV)</button>
+          </div>
+        </div>
+        <div class="mt-2 flex flex-wrap items-end gap-3">
+          <div class="fl"><span>Direction</span>
+            <div class="seg-group" id="detDirGroup">
+              <button class="seg active" data-ddir="all">Both</button>
+              <button class="seg" data-ddir="import">Import</button>
+              <button class="seg" data-ddir="export">Export</button>
+              <button class="seg" data-ddir="unknown">Unclear</button>
+            </div>
+          </div>
+          <div class="fl"><span id="detPeriodLabel">Month</span>
+            <div class="flex gap-1">
+              <select id="detPeriodSel" class="sel"></select>
+              <button id="detLatest" class="seg-group seg">Latest</button>
+            </div>
+          </div>
+          <label class="fl"><span>Arrival from</span><input type="date" id="detFrom" class="inp"></label>
+          <label class="fl"><span>Arrival to</span><input type="date" id="detTo" class="inp"></label>
+          <label class="fl"><span>Company (shipper or consignee)</span><input type="text" id="detName" class="inp w-52" placeholder="e.g. Ningbo"></label>
+          <label class="fl"><span>Goods description contains</span><input type="text" id="detGoods" class="inp w-52" placeholder="e.g. lighting"></label>
+          <label class="fl"><span>Shipped from</span><select id="detOrigin" class="sel max-w-[170px]"></select></label>
+          <label class="fl"><span>Shipped to</span><select id="detDest" class="sel max-w-[170px]"></select></label>
+        </div>
+        <div id="detChips" class="mt-2 flex flex-wrap gap-1.5"></div>
+        <p class="text-[10px] text-slate-400 mt-1">Tip: click a bar in any chart to pick that period, click a date to see that single day, or click a company or goods group to filter by it.</p>
+      </div>
+
+      <div class="p-3 border-b border-slate-200">
+        <h4 class="text-xs font-bold text-slate-700 mb-2">Goods in this selection</h4>
+        <div class="table-container overflow-auto max-h-[300px]">
+          <table id="detGoodsTable" class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 sticky top-0">
+              <tr><th>Goods</th><th class="text-right text-sky-700">Import</th><th class="text-right text-amber-700">Export</th><th class="text-right text-slate-500">Unclear</th><th class="text-right">Weight (kg)</th><th class="text-right">Companies</th><th>Main routes (from → to)</th><th>First arrival</th><th>Last arrival</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="p-3">
+        <h4 class="text-xs font-bold text-slate-700 mb-2">Every shipment in this selection</h4>
+        <div class="table-container overflow-auto max-h-[640px] border border-slate-100 rounded">
+          <table id="detTable" class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10">
+              <tr>
+                <th class="sortable" data-sort="date">Arrival date</th>
+                <th class="sortable" data-sort="dir">Import / export</th>
+                <th class="sortable" data-sort="goods">Goods description</th>
+                <th class="sortable" data-sort="partner">Associated company</th>
+                <th class="sortable" data-sort="shipper">Shipper</th>
+                <th class="sortable" data-sort="consignee">Consignee</th>
+                <th class="sortable" data-sort="route">From → to</th>
+                <th class="sortable text-right" data-sort="qty">Quantity</th>
+                <th class="sortable text-right" data-sort="weight">Weight (kg)</th>
+                <th class="sortable text-right" data-sort="containers">Containers</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between mt-2">
+          <span id="detShown" class="text-[11px] text-slate-500"></span>
+          <button id="detMore" class="hidden bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded border border-slate-300">Show 200 more</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
+  <div class="bg-white p-5 rounded-xl shadow-xl max-w-xs w-full text-center text-xs">
+    <div id="ovTitle" class="font-bold text-slate-800 mb-1">Loading files…</div>
+    <div id="ovText" class="text-slate-500 mb-3">Please wait</div>
+    <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+      <div id="ovBar" class="bg-teal-600 h-full w-0 transition-all duration-200"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- constants & helpers ---------- */
+  const SKY = '#0284c7', AMBER = '#f59e0b', TEAL = '#0d9488', INK = '#334155';
+  const SKY_RGB = '2,132,199', AMBER_RGB = '245,158,11';
+  const GREY = '#94a3b8', GREY_RGB = '148,163,184';
+  const DK = d => d === 'import' ? 'imp' : d === 'export' ? 'exp' : 'unk';
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const GRAN_ONE = { week: 'week', month: 'month', quarter: 'quarter', year: 'year' };
+  const GRAN_MANY = { week: 'weeks', month: 'months', quarter: 'quarters', year: 'years' };
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, '0');
+  const fmtInt = n => Math.round(n || 0).toLocaleString('en-GB');
+  const fmtCompact = n => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+  const pct = (a, t) => t ? Math.round(a / t * 100) : 0;
+  const trunc = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const fmtDate = d => d ? `${pad(d.getUTCDate())} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}` : '—';
+  const isoDate = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  const parseNum = v => { if (typeof v === 'number') return v; const n = parseFloat(String(v || '').replace(/,/g, '')); return isNaN(n) ? 0 : n; };
+  const dirBadge = d => d === 'import' ? '<span class="badge badge-imp">Import</span>' : d === 'export' ? '<span class="badge badge-exp">Export</span>' : '<span class="badge badge-unk" title="Matching Fields and company name do not show whether the company is shipper or consignee">Unclear</span>';
+
+  const METRICS = {
+    count:      { label: 'Shipments',  val: () => 1,          fmt: n => fmtInt(n) },
+    weight:     { label: 'Weight (kg)', val: r => r.weight,    fmt: n => fmtCompact(n) + ' kg' },
+    containers: { label: 'Containers', val: r => r.containers, fmt: n => fmtInt(n) }
+  };
+
+  const SHIPMENT_COLUMNS = [
+    'Matching Fields', 'Consignee', 'Consignee Full Address', 'Consignee Email 1', 'Consignee Phone 1',
+    'Consignee Website 1', 'Consignee Profile', 'Consignee Trade Roles', 'Shipper', 'Shipper Full Address',
+    'Shipper Email 1', 'Shipper Phone 1', 'Shipper Website 1', 'Shipper Profile', 'Shipper Trade Roles',
+    'Shipment Origin', 'Shipment Destination', 'Port of Lading', 'Port of Unlading',
+    'Quantity', 'Weight (kg)', 'Number of Containers', 'Goods Shipped'
+  ];
+
+  const COL_PATTERNS = {
+    date:        [/^arrival date$/i, /arrival/i, /^date$/i, /date/i],
+    consignee:   [/^consignee$/i, /^consignee name$/i],
+    shipper:     [/^shipper$/i, /^shipper name$/i],
+    consAddr:    [/^consignee full address$/i, /^consignee.*address/i],
+    shipAddr:    [/^shipper full address$/i, /^shipper.*address/i],
+    weight:      [/^weight \(kg\)$/i, /weight.*kg/i, /^weight/i],
+    containers:  [/number of containers/i, /containers/i],
+    goods:       [/^goods shipped$/i, /goods/i, /description/i],
+    qty:         [/^quantity$/i, /quantity/i],
+    origin:      [/^shipment origin$/i, /^origin country$/i, /^country of origin$/i, /origin/i],
+    destination: [/^shipment destination$/i, /^destination country$/i, /^country of destination$/i, /^destination$/i],
+    portLoad:    [/port of lading/i, /port of loading/i, /^load(ing)? port/i, /^origin port/i],
+    portDis:     [/port of unlading/i, /port of discharge/i, /^discharge port/i, /^destination port/i],
+    matching:    [/matching fields/i],
+    consRole:    [/consignee trade roles/i],
+    consProfile: [/consignee profile/i]
+  };
+
+  const CO_STOP = new Set(['INC','LLC','LTD','LIMITED','CO','CORP','CORPORATION','COMPANY','THE','GROUP','INTERNATIONAL','INTL','SA','DE','CV','GMBH','SRL','SPA','PTE','PVT','AND','OF','USA','US','LLP','PLC','AG','BV','NV']);
+  const GOODS_STOP = new Set(['PCS','PC','PIECE','PIECES','PKG','PKGS','PACKAGE','PACKAGES','CTN','CTNS','CARTON','CARTONS','PLT','PLTS','PALLET','PALLETS','BOX','BOXES','BAG','BAGS','ROLL','ROLLS','UNIT','UNITS','SET','SETS','OF','AND','THE','FOR','WITH','IN','ON','TO','AN','SAID','CONTAIN','CONTAINS','CONTAINING','STC','SLAC','SHIPPER','SHIPPERS','LOAD','COUNT','SEAL','HS','CODE','HTS','PO','NO','NOS','INVOICE','QTY','TOTAL','KGS','KG','LBS','CBM','FREIGHT','PREPAID','COLLECT','CONTAINER','CONTAINERS','FCL','LCL','CY','CFS','NW','GW','AS','PER','ORDER','BY','THIS','SHIPMENT','DOES','NOT','ANY','HAS','BEEN','ITEM','ITEMS','REF','NUMBER']);
+
+  const findCol = (headers, pats) => { for (const p of pats) { const h = headers.find(x => p.test(x)); if (h) return h; } return null; };
+  const nameTokens = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').split(' ').filter(t => t.length > 1 && !CO_STOP.has(t));
+  const overlap = (tokens, set) => tokens.reduce((n, t) => n + (set.has(t) ? 1 : 0), 0);
+
+  function countryOf(addr) {
+    const parts = String(addr || '').split(',').map(p => p.replace(/[0-9\-]+/g, '').trim()).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : 'Unknown';
+  }
+
+  function goodsKey(desc) {
+    const words = String(desc || '').toUpperCase().replace(/[^A-Z\s]+/g, ' ').split(/\s+/)
+      .filter(w => w.length >= 2 && !GOODS_STOP.has(w));
+    if (!words.length) return 'Unspecified';
+    return words.slice(0, 3).map(w => w[0] + w.slice(1).toLowerCase()).join(' ');
+  }
+
+  function getCompanyName(filename) {
+    if (!filename) return 'Unknown company';
+    const name = filename.replace(/\.[^/.]+$/, '');
+    const match = name.match(/_-(.+?)-_results/);
+    if (match && match[1]) return match[1].replace(/_/g, ' ');
+    return name.replace(/^Panjiva-[\w\s_-]+?-_?/, '').replace(/-?results.*$/, '').replace(/_/g, ' ').trim() || name;
+  }
+
+  /* ---------- goods column detection ---------- */
+  const NOT_GOODS = /date|address|email|phone|website|profile|trade roles|matching|^consignee$|^shipper$|notify|weight|quantity|container|port|country|city|state|zip|bill of lading|carrier|vessel/i;
+  function textStats(rows, h) {
+    let filled = 0, len = 0;
+    rows.forEach(r => { const x = String(r[h] ?? '').trim(); if (x) { filled++; len += x.length; } });
+    return { fill: rows.length ? filled / rows.length : 0, avg: filled ? len / filled : 0 };
+  }
+  function pickGoodsCol(headers, rows) {
+    const exact = headers.find(h => /^goods shipped$/i.test(h));
+    if (exact && textStats(rows, exact).fill > 0.2) return exact;
+    const named = headers.filter(h => /goods|description|product|commodity|cargo|merchandise/i.test(h) && !/hs code|count|value/i.test(h));
+    const score = h => { const t = textStats(rows, h); return t.fill * t.avg; };
+    const bestNamed = named.sort((a, b) => score(b) - score(a))[0];
+    if (bestNamed && textStats(rows, bestNamed).fill > 0.2) return bestNamed;
+    const other = headers.filter(h => !NOT_GOODS.test(h)).sort((a, b) => score(b) - score(a))[0];
+    return (other && score(other) > 0) ? other : (exact || bestNamed || null);
+  }
+  function setGoodsCol(f, col) {
+    f.goodsCol = col;
+    f.recs.forEach(r => {
+      r.goods = String(col ? (r.raw[col] ?? '') : '').replace(/\s+/g, ' ').trim() || 'Unspecified';
+      r.goodsKey = goodsKey(r.goods);
+      r.search = [r.goods, r.shipper, r.consignee, r.shipAddr, r.consAddr, r.origin, r.destination, r.portLoad, r.portDis].join(' ').toLowerCase();
+    });
+  }
+
+  /* Matching Fields looks like "Goods Shipped: ...text..." or "Consignee: ACME; Shipper: ...".
+     Only field names at the start of the cell or after a line break / ; / | count as labels,
+     so words inside the matched text are not mistaken for field names. */
+  function matchLabels(mf) {
+    const out = [];
+    const re = /(?:^|[\n;|])\s*([A-Za-z][A-Za-z ()\/]{1,40}?)\s*:/g;
+    let m;
+    while ((m = re.exec(String(mf || '')))) out.push(m[1].trim());
+    return [...new Set(out)];
+  }
+
+  /* ---------- robust date parsing ---------- */
+  const monthIdx = w => { const i = MON.findIndex(m => m.toLowerCase() === String(w).slice(0, 3).toLowerCase()); return i < 0 ? null : i + 1; };
+  const fixY = y => { y = +y; return y < 100 ? 2000 + y : y; };
+  const validYMD = (y, m, d) => (y >= 1980 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) ? { y, m, d } : null;
+
+  function toYMD(v, dayFirst) {
+    if (v == null || v === '') return null;
+    if (v instanceof Date && !isNaN(v)) return validYMD(v.getFullYear(), v.getMonth() + 1, v.getDate());
+    const s = String(v).trim();
+    if (typeof v === 'number' || /^\d{5}(\.\d+)?$/.test(s) || /^\d{8}$/.test(s)) {
+      const n = +s;
+      if (n > 19800101 && n < 21001231) return validYMD(Math.floor(n / 10000), Math.floor(n / 100) % 100, n % 100);
+      if (n > 20000 && n < 80000) { const p = XLSX.SSF.parse_date_code(n); if (p) return validYMD(p.y, p.m, p.d); }
+      return null;
+    }
+    let m;
+    if ((m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) return validYMD(+m[1], +m[2], +m[3]);
+    if ((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))) {
+      const a = +m[1], b = +m[2], y = fixY(m[3]);
+      if (a > 12) return validYMD(y, b, a);
+      if (b > 12) return validYMD(y, a, b);
+      return dayFirst ? validYMD(y, b, a) : validYMD(y, a, b);
+    }
+    if ((m = s.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{2,4})/))) { const mo = monthIdx(m[1]); if (mo) return validYMD(fixY(m[3]), mo, +m[2]); }
+    if ((m = s.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s\-\/]+([A-Za-z]{3,})\.?[\s\-\/,]+(\d{2,4})/))) { const mo = monthIdx(m[2]); if (mo) return validYMD(fixY(m[3]), mo, +m[1]); }
+    if ((m = s.match(/^([A-Za-z]{3,})\.?[\s\-\/]+(\d{4})$/))) { const mo = monthIdx(m[1]); if (mo) return validYMD(+m[2], mo, 1); }
+    const t = Date.parse(s);
+    if (!isNaN(t)) { const d = new Date(t); return validYMD(d.getFullYear(), d.getMonth() + 1, d.getDate()); }
+    return null;
+  }
+
+  function analyseDateColumn(values) {
+    let df = 0, mf = 0, serial = 0, text = 0, slash = 0;
+    for (const v of values) {
+      if (v === '' || v == null) continue;
+      if (typeof v === 'number') { serial++; continue; }
+      text++;
+      const m = String(v).trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/);
+      if (!m) continue;
+      slash++;
+      if (+m[1] > 12) df++; else if (+m[2] > 12) mf++;
+    }
+    const dayFirst = df > mf;
+    let note = 'no dates found';
+    if (serial >= text && serial > 0) note = 'Excel date cells';
+    else if (slash > text / 2) note = dayFirst ? 'text dates, day/month/year' : 'text dates, month/day/year';
+    else if (text > 0) note = 'text dates';
+    return { dayFirst, note };
+  }
+
+  /* ---------- periods ---------- */
+  function periodKey(d, g) {
+    const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+    if (g === 'month') return `${y}-${pad(m)}`;
+    if (g === 'quarter') return `${y}-Q${Math.ceil(m / 3)}`;
+    if (g === 'year') return `${y}`;
+    const dow = (d.getUTCDay() + 6) % 7;
+    return isoDate(new Date(d.getTime() - dow * 864e5));
+  }
+
+  function buildPeriods(min, max, g) {
+    const out = [];
+    if (g === 'week') {
+      let cur = new Date(periodKey(min, 'week') + 'T00:00:00Z');
+      while (cur <= max) {
+        const yy = String(cur.getUTCFullYear()).slice(2);
+        out.push({ key: isoDate(cur), label: `Week of ${cur.getUTCDate()} ${MON[cur.getUTCMonth()]} ${cur.getUTCFullYear()}`, short: `${pad(cur.getUTCDate())}/${pad(cur.getUTCMonth() + 1)}/${yy}` });
+        cur = new Date(cur.getTime() + 7 * 864e5);
+      }
+      return out;
+    }
+    let y = min.getUTCFullYear(), m = min.getUTCMonth() + 1;
+    const ey = max.getUTCFullYear(), em = max.getUTCMonth() + 1;
+    if (g === 'month') {
+      while (y < ey || (y === ey && m <= em)) {
+        out.push({ key: `${y}-${pad(m)}`, label: `${MON[m - 1]} ${y}`, short: `${MON[m - 1]} ${String(y).slice(2)}` });
+        if (++m > 12) { m = 1; y++; }
+      }
+    } else if (g === 'quarter') {
+      let q = Math.ceil(m / 3); const eq = Math.ceil(em / 3);
+      while (y < ey || (y === ey && q <= eq)) {
+        out.push({ key: `${y}-Q${q}`, label: `Q${q} ${y}`, short: `Q${q} ${String(y).slice(2)}` });
+        if (++q > 4) { q = 1; y++; }
+      }
+    } else {
+      for (; y <= ey; y++) out.push({ key: `${y}`, label: `${y}`, short: `${y}` });
+    }
+    return out;
+  }
+
+  function movingAvg(arr, k) {
+    return arr.map((_, i) => { const s = arr.slice(Math.max(0, i - k + 1), i + 1); return s.reduce((a, b) => a + b, 0) / s.length; });
+  }
+
+  /* ---------- state ---------- */
+  const filesData = new Map();
+  let currentFileKey = null, lastFiles = null, lastView = null, lastShipRows = [];
+  const charts = {};
+  const state = {
+    tab: 'overview', gran: 'month', metric: 'count', group: 'smart', dirMode: 'auto', search: '',
+    mentions: 'show', tlStyle: 'stacked', expanded: null, calDir: 'all', calTop: '25', calSel: null, shipDir: 'all', shipPeriod: 'all',
+    det: freshDet()
+  };
+  function freshDet() { return { dir: 'all', period: 'all', from: '', to: '', name: '', goods: '', gk: null, origin: '', dest: '', sort: 'date', sortDir: 'desc', limit: 200 }; }
+  let lastDetRows = [];
+
+  Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--font');
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#475569';
+  Chart.defaults.plugins.legend.labels.boxWidth = 10;
+
+  function mkChart(id, cfg) {
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart($(id).getContext('2d'), cfg);
+  }
+
+  /* ---------- file loading ---------- */
+  async function parseFile(file) {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const sheetName = wb.SheetNames.find(n => /consolidated/i.test(n)) || wb.SheetNames.find(n => /us imports shipments/i.test(n)) || wb.SheetNames.find(n => /shipment/i.test(n)) || wb.SheetNames[0];
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '', raw: true, blankrows: false });
+
+    let hi = aoa.slice(0, 30).findIndex(row => row.some(c => /^(arrival date|shipment date|consignee|shipper|goods shipped|shipment origin|shipment destination|matching fields)$/i.test(String(c).trim())));
+    if (hi < 0) hi = 0;
+    const seen = {};
+    const headers = (aoa[hi] || []).map((h, i) => {
+      let k = String(h).trim() || `Column ${i + 1}`;
+      if (seen[k]) { seen[k]++; k = `${k} (${seen[k]})`; } else seen[k] = 1;
+      return k;
+    });
+    const rows = aoa.slice(hi + 1)
+      .filter(r => r.some(c => String(c).trim() !== ''))
+      .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ''; }); return o; });
+
+    const cols = {};
+    for (const [k, pats] of Object.entries(COL_PATTERNS)) cols[k] = findCol(headers, pats);
+    const get = (r, k) => cols[k] ? r[cols[k]] : '';
+
+    const companyName = getCompanyName(file.name);
+    const coTokens = new Set(nameTokens(companyName));
+    const dateInfo = analyseDateColumn(rows.map(r => get(r, 'date')));
+    let undatedSample = '';
+
+    const recs = rows.map((r, i) => {
+      const ymd = toYMD(get(r, 'date'), dateInfo.dayFirst);
+      const date = ymd ? new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.d)) : null;
+      if (!date && !undatedSample) undatedSample = String(get(r, 'date'));
+      const shipper = String(get(r, 'shipper') || '').trim() || 'Unknown shipper';
+      const consignee = String(get(r, 'consignee') || '').trim() || 'Unknown consignee';
+      const shipAddr = String(get(r, 'shipAddr') || '');
+      const consAddr = String(get(r, 'consAddr') || '');
+
+      const roleText = (String(get(r, 'consRole')) + ' ' + String(get(r, 'consProfile'))).toLowerCase();
+      const dirLegacy = roleText.includes('exporter') ? 'export' : 'import';
+
+      let dirAuto = null;
+      const mfRaw = String(get(r, 'matching') || '');
+      const labels = matchLabels(mfRaw);
+      let matchKind = 'unknown';
+      if (labels.length) {
+        const hasS = labels.some(l => /^(shipper|exporter|supplier|seller)/i.test(l));
+        const hasC = labels.some(l => /^(consignee|notify|importer|buyer)/i.test(l));
+        if (hasS && !hasC) dirAuto = 'export';
+        else if (hasC && !hasS) dirAuto = 'import';
+        matchKind = (hasS || hasC) ? 'party' : 'text';
+      } else if (mfRaw) {
+        const mf = mfRaw.slice(0, 40).toLowerCase();
+        const hasS = /shipper/.test(mf), hasC = /consignee|notify/.test(mf);
+        if (hasS && !hasC) dirAuto = 'export'; else if (hasC && !hasS) dirAuto = 'import';
+      }
+      let nameHit = false;
+      if (coTokens.size) {
+        const sc = overlap(nameTokens(consignee), coTokens), ss = overlap(nameTokens(shipper), coTokens);
+        nameHit = sc > 0 || ss > 0;
+        if (!dirAuto) { if (sc > ss) dirAuto = 'import'; else if (ss > sc) dirAuto = 'export'; }
+      }
+      if (!dirAuto) dirAuto = mfRaw.trim() ? 'unknown' : dirLegacy;
+      const mentionOnly = matchKind === 'text' && !nameHit;
+
+      const origin = String(get(r, 'origin') || '').trim();
+      const destination = String(get(r, 'destination') || '').trim();
+      const portLoad = String(get(r, 'portLoad') || '').trim();
+      const portDis = String(get(r, 'portDis') || '').trim();
+
+      return {
+        i, raw: r, date, shipper, consignee, shipAddr, consAddr, qty: parseNum(get(r, 'qty')),
+        origin, destination, portLoad, portDis,
+        route: `${origin || 'Unknown'} → ${destination || 'Unknown'}`,
+        matchedIn: labels.join(', '), mentionOnly,
+        shipCountry: origin || countryOf(shipAddr), consCountry: destination || countryOf(consAddr),
+        weight: parseNum(get(r, 'weight')), containers: parseNum(get(r, 'containers')),
+        dirAuto, dirLegacy
+      };
+    });
+
+    const f = { fileName: file.name, companyName, headers, cols, recs, dateNote: dateInfo.note, undatedSample, sheetName, rowsRead: rows.length,
+      mentionShare: recs.length ? recs.filter(r => r.mentionOnly).length / recs.length : 0 };
+    setGoodsCol(f, pickGoodsCol(headers, rows));
+    return f;
+  }
+
+  function showOverlay(title, text, p) {
+    const ov = $('overlay'); ov.classList.remove('hidden'); ov.classList.add('flex');
+    $('ovTitle').textContent = title;
+    if (text) $('ovText').textContent = text;
+    if (p != null) $('ovBar').style.width = p + '%';
+  }
+  function hideOverlay() { const ov = $('overlay'); ov.classList.remove('flex'); ov.classList.add('hidden'); }
+
+  async function loadFiles(files) {
+    showOverlay('Reading Excel files', `Processing 0 of ${files.length}`, 0);
+    filesData.clear();
+    let count = 0;
+    for (const file of files) {
+      try {
+        const data = await parseFile(file);
+        filesData.set(file.name, data);
+        count++;
+        showOverlay('Reading Excel files', `Loaded: ${data.companyName} (${count}/${files.length})`, (count / files.length) * 100);
+      } catch (err) { console.error('Error parsing file:', file.name, err); }
+    }
+    hideOverlay();
+    if (!filesData.size) { alert('None of the files could be read.'); return; }
+
+    $('emptyState').classList.add('hidden');
+    ['bar2', 'durationBanner', 'fileSelWrap', 'ctrlBar'].forEach(id => $(id).classList.remove('hidden'));
+    $('folderLabel').textContent = `${filesData.size} company file(s) loaded`;
+    $('btnReload').disabled = false;
+
+    const fileSel = $('fileSel');
+    const prev = currentFileKey;
+    fileSel.innerHTML = '';
+    [...filesData.entries()].sort((a, b) => a[1].companyName.localeCompare(b[1].companyName)).forEach(([fname, d]) => {
+      const opt = document.createElement('option');
+      opt.value = fname; opt.textContent = d.companyName;
+      fileSel.appendChild(opt);
+    });
+    if (prev && filesData.has(prev)) fileSel.value = prev;
+    currentFileKey = fileSel.value;
+    resetSelections();
+    render();
+    setTab(state.tab);
+  }
+
+  function resetSelections() { state.expanded = null; state.calSel = null; state.shipPeriod = 'all'; state.det.period = 'all'; state.det.gk = null; state.det.limit = 200; }
+
+  /* ---------- view model ---------- */
+  function getView() {
+    const f = filesData.get(currentFileKey);
+    if (!f) return null;
+    const terms = state.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const hideMentions = state.mentions === 'hide';
+    const recs = f.recs.filter(r => !(hideMentions && r.mentionOnly) && terms.every(t => r.search.includes(t)));
+    recs.forEach(r => {
+      r.dir = state.dirMode === 'auto' ? r.dirAuto : r.dirLegacy;
+      r.gk = state.group === 'smart' ? r.goodsKey : r.goods;
+      r.cp = r.dir === 'import' ? r.shipper : r.dir === 'export' ? r.consignee : `${r.shipper} / ${r.consignee}`;
+      r.cpCountry = r.dir === 'import' ? r.shipCountry : r.dir === 'export' ? r.consCountry : r.route;
+      r.pk = r.date ? periodKey(r.date, state.gran) : null;
+    });
+    const dated = recs.filter(r => r.date);
+    let periods = [], min = null, max = null;
+    if (dated.length) {
+      min = dated.reduce((a, r) => r.date < a ? r.date : a, dated[0].date);
+      max = dated.reduce((a, r) => r.date > a ? r.date : a, dated[0].date);
+      periods = buildPeriods(min, max, state.gran);
+    }
+    const idx = new Map(periods.map((p, i) => [p.key, i]));
+    const plabel = new Map(periods.map(p => [p.key, p.label]));
+    const hiddenMentions = hideMentions ? f.recs.filter(r => r.mentionOnly).length : 0;
+    return { file: f, recs, dated, periods, idx, plabel, min, max, hiddenMentions };
+  }
+
+  function seriesByDir(v, metric = state.metric) {
+    const n = v.periods.length, mv = METRICS[metric].val;
+    const imp = new Array(n).fill(0), exp = new Array(n).fill(0), unk = new Array(n).fill(0);
+    const by = { imp, exp, unk };
+    v.dated.forEach(r => { const i = v.idx.get(r.pk); if (i != null) by[DK(r.dir)][i] += mv(r); });
+    return { imp, exp, unk };
+  }
+
+  function render() {
+    const v = getView();
+    if (!v) return;
+    lastView = v;
+    renderBanner(v);
+    renderOverview(v);
+    renderTimeline(v);
+    renderCalendar(v);
+    renderCompare(v);
+    renderShipments(v);
+    renderDetail(v);
+    syncGoodsColSel(v.file);
+  }
+
+  function syncGoodsColSel(f) {
+    const s = $('goodsColSel');
+    s.innerHTML = f.headers.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
+    if (f.goodsCol) s.value = f.goodsCol;
+  }
+
+  /* ---------- chart helpers: readable x axis, highlight, click-to-select ---------- */
+  function xTicks(v) {
+    const n = v.periods.length, step = Math.max(1, Math.ceil(n / 14));
+    return { autoSkip: false, maxRotation: 0, callback: (val, i) => (i === n - 1 || (i % step === 0 && n - 1 - i >= Math.ceil(step / 2))) ? v.periods[i].short : '' };
+  }
+  function selIdx(v) { const p = state.det.period; return (p && p !== 'all' && p !== '__nodate') ? (v.idx.get(p) ?? -1) : -1; }
+  function hl(color, rgb, v) { const si = selIdx(v); return si < 0 ? color : v.periods.map((_, i) => i === si ? color : `rgba(${rgb},0.25)`); }
+  function periodClick(v) {
+    return {
+      onClick: (evt, els) => {
+        if (!els.length) return;
+        const p = v.periods[els[0].index]; if (!p) return;
+        state.det.period = state.det.period === p.key ? 'all' : p.key;
+        state.det.limit = 200;
+        render();
+        $('detailSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+      onHover: (evt, els) => { if (evt.native && evt.native.target) evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+    };
+  }
+  function lastActivePeriod(v) {
+    const seen = new Set(v.dated.map(r => r.pk));
+    for (let i = v.periods.length - 1; i >= 0; i--) if (seen.has(v.periods[i].key)) return v.periods[i];
+    return null;
+  }
+
+  /* ---------- details below plots ---------- */
+  function detRows(v) {
+    const d = state.det;
+    const from = d.from ? Date.parse(d.from + 'T00:00:00Z') : null;
+    const to = d.to ? Date.parse(d.to + 'T00:00:00Z') : null;
+    const nameT = d.name.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const goodsT = d.goods.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return v.recs.filter(r => {
+      if (d.dir !== 'all' && r.dir !== d.dir) return false;
+      if (d.period === '__nodate' ? !!r.date : (d.period !== 'all' && r.pk !== d.period)) return false;
+      if (from != null && (!r.date || r.date.getTime() < from)) return false;
+      if (to != null && (!r.date || r.date.getTime() > to)) return false;
+      if (d.gk && r.gk !== d.gk) return false;
+      if (d.origin && r.origin !== d.origin) return false;
+      if (d.dest && r.destination !== d.dest) return false;
+      if (nameT.length) { const s = (r.shipper + ' ' + r.consignee).toLowerCase(); if (!nameT.every(t => s.includes(t))) return false; }
+      if (goodsT.length) { const s = r.goods.toLowerCase(); if (!goodsT.every(t => s.includes(t))) return false; }
+      return true;
+    });
+  }
+
+  const SORTERS = {
+    date: r => r.date ? r.date.getTime() : -Infinity, dir: r => r.dir, goods: r => r.goods.toLowerCase(),
+    partner: r => r.cp.toLowerCase(), shipper: r => r.shipper.toLowerCase(), consignee: r => r.consignee.toLowerCase(),
+    route: r => r.route.toLowerCase(), qty: r => r.qty, weight: r => r.weight, containers: r => r.containers
+  };
+
+  function routeText(r) {
+    if (!r.origin && !r.destination && !r.portLoad && !r.portDis) return '';
+    let t = `From ${esc(r.origin || 'unknown origin')} to ${esc(r.destination || 'unknown destination')}`;
+    if (r.portLoad || r.portDis) t += `<span class="font-normal text-slate-500">, ${esc(r.portLoad || '?')} → ${esc(r.portDis || '?')}</span>`;
+    return t;
+  }
+
+  function renderDetail(v) {
+    const d = state.det;
+    // filter controls
+    syncSeg('detDirGroup', 'ddir', d.dir);
+    $('detPeriodLabel').textContent = GRAN_ONE[state.gran][0].toUpperCase() + GRAN_ONE[state.gran].slice(1);
+    const counts = new Map();
+    v.recs.forEach(r => { const k = r.pk || '__nodate'; counts.set(k, (counts.get(k) || 0) + 1); });
+    let opts = `<option value="all">All ${GRAN_MANY[state.gran]}</option>`;
+    for (let i = v.periods.length - 1; i >= 0; i--) {
+      const p = v.periods[i], c = counts.get(p.key) || 0;
+      opts += `<option value="${esc(p.key)}">${esc(p.label)} (${c})</option>`;
+    }
+    if (counts.get('__nodate')) opts += `<option value="__nodate">No readable date (${counts.get('__nodate')})</option>`;
+    const ps = $('detPeriodSel');
+    ps.innerHTML = opts;
+    if (![...ps.options].some(o => o.value === d.period)) d.period = 'all';
+    ps.value = d.period;
+    if (v.min) { $('detFrom').min = $('detTo').min = isoDate(v.min); $('detFrom').max = $('detTo').max = isoDate(v.max); }
+    $('detFrom').value = d.from; $('detTo').value = d.to;
+    if (document.activeElement !== $('detName')) $('detName').value = d.name;
+    const routeOpts = (key, all) => {
+      const m = new Map(); v.recs.forEach(r => { if (r[key]) m.set(r[key], (m.get(r[key]) || 0) + 1); });
+      return `<option value="">${all}</option>` + [...m].sort((a, b) => b[1] - a[1]).map(([k, c]) => `<option value="${esc(k)}">${esc(k)} (${c})</option>`).join('');
+    };
+    $('detOrigin').innerHTML = routeOpts('origin', 'Any origin');
+    $('detDest').innerHTML = routeOpts('destination', 'Any destination');
+    if (d.origin && ![...$('detOrigin').options].some(o => o.value === d.origin)) d.origin = '';
+    if (d.dest && ![...$('detDest').options].some(o => o.value === d.dest)) d.dest = '';
+    $('detOrigin').value = d.origin; $('detDest').value = d.dest;
+    $('detOrigin').disabled = $('detDest').disabled = !(v.file.cols.origin || v.file.cols.destination);
+    if (document.activeElement !== $('detGoods')) $('detGoods').value = d.goods;
+
+    // chips
+    const chips = [];
+    if (d.dir !== 'all') chips.push(['dir', d.dir === 'import' ? 'Imports only' : d.dir === 'export' ? 'Exports only' : 'Unclear direction only']);
+    if (d.period !== 'all') chips.push(['period', d.period === '__nodate' ? 'No readable date' : (v.plabel.get(d.period) || d.period)]);
+    if (d.from || d.to) chips.push(['dates', d.from && d.from === d.to ? `Day ${d.from}` : `${d.from || 'start'} to ${d.to || 'end'}`]);
+    if (d.name.trim()) chips.push(['name', `Company: ${d.name.trim()}`]);
+    if (d.goods.trim()) chips.push(['goods', `Goods text: ${d.goods.trim()}`]);
+    if (d.gk) chips.push(['gk', `Goods group: ${d.gk}`]);
+    if (d.origin) chips.push(['origin', `From: ${d.origin}`]);
+    if (d.dest) chips.push(['dest', `To: ${d.dest}`]);
+    $('detChips').innerHTML = chips.map(c => `<span class="chip">${esc(c[1])}<button data-chip="${c[0]}" aria-label="Remove filter">×</button></span>`).join('');
+
+    const rs = detRows(v);
+    const f = SORTERS[d.sort] || SORTERS.date, mul = d.sortDir === 'asc' ? 1 : -1;
+    rs.sort((a, b) => { const x = f(a), y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * mul || ((b.date ? b.date.getTime() : 0) - (a.date ? a.date.getTime() : 0)); });
+    lastDetRows = rs;
+
+    const imp = rs.filter(r => r.dir === 'import').length, exp = rs.filter(r => r.dir === 'export').length, unk = rs.length - imp - exp;
+    const days = new Set(rs.filter(r => r.date).map(r => isoDate(r.date))).size;
+    $('detSummary').textContent = `${fmtInt(rs.length)} of ${fmtInt(v.recs.length)} shipments, ${fmtInt(imp)} import, ${fmtInt(exp)} export${unk ? `, ${fmtInt(unk)} unclear` : ''}, ${fmtCompact(sum(rs, r => r.weight))} kg, on ${days} arrival day(s). Goods read from column "${v.file.goodsCol || 'none found'}".`;
+
+    // goods summary
+    const gm = new Map();
+    rs.forEach(r => {
+      const o = gm.get(r.gk) || { imp: 0, exp: 0, unk: 0, w: 0, cos: new Set(), routes: new Map(), first: null, last: null };
+      o[DK(r.dir)]++; o.w += r.weight; o.cos.add(r.cp);
+      o.routes.set(r.route, (o.routes.get(r.route) || 0) + 1);
+      if (r.date) { if (!o.first || r.date < o.first) o.first = r.date; if (!o.last || r.date > o.last) o.last = r.date; }
+      gm.set(r.gk, o);
+    });
+    const gl = [...gm].sort((a, b) => (b[1].imp + b[1].exp + b[1].unk) - (a[1].imp + a[1].exp + a[1].unk));
+    document.querySelector('#detGoodsTable tbody').innerHTML = gl.map(([gk, o]) => `<tr class="clickable-row hover:bg-slate-50 ${d.gk === gk ? 'bg-teal-50' : ''}" data-gk="${esc(gk)}">
+      <td class="font-medium text-slate-800 max-w-[320px] truncate" title="${esc(gk)}">${esc(gk)}</td>
+      <td class="text-right num text-sky-700">${o.imp || ''}</td>
+      <td class="text-right num text-amber-700">${o.exp || ''}</td>
+      <td class="text-right num text-slate-500">${o.unk || ''}</td>
+      <td class="text-right num">${fmtInt(o.w)}</td>
+      <td class="text-right num">${o.cos.size}</td>
+      <td class="max-w-[260px] truncate text-slate-600" title="${esc([...o.routes].sort((a, b) => b[1] - a[1]).map(x => `${x[0]} (${x[1]})`).join('\n'))}">${esc([...o.routes].sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => `${x[0]} (${x[1]})`).join(', '))}</td>
+      <td class="whitespace-nowrap">${fmtDate(o.first)}</td>
+      <td class="whitespace-nowrap">${fmtDate(o.last)}</td></tr>`).join('') ||
+      '<tr><td colspan="9" class="text-slate-400">No goods match these filters.</td></tr>';
+
+    // shipment rows
+    document.querySelectorAll('#detTable th.sortable').forEach(th => {
+      const base = th.textContent.replace(/ [▲▼]$/, '');
+      th.textContent = base + (th.dataset.sort === d.sort ? (d.sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+    });
+    const shown = rs.slice(0, d.limit);
+    document.querySelector('#detTable tbody').innerHTML = shown.map(r => `<tr class="hover:bg-slate-50">
+      <td class="whitespace-nowrap num">${r.date ? `<span class="link" data-day="${isoDate(r.date)}" title="Show only this day">${fmtDate(r.date)}</span>` : `<span class="text-rose-600">${esc(r.raw[v.file.cols.date] || 'no date')}</span>`}</td>
+      <td>${dirBadge(r.dir)}</td>
+      <td class="min-w-[260px] max-w-[460px]">
+        <div class="text-[11px] font-semibold text-teal-800 mb-0.5">${routeText(r)}</div>
+        <div class="text-slate-800 leading-snug">${esc(r.goods)}</div>
+        <div class="flex flex-wrap gap-1.5 items-center mt-0.5">
+          <span class="link text-[10px] text-slate-400" data-gk="${esc(r.gk)}" title="Filter by this goods group">${esc(r.gk)}</span>
+          ${r.matchedIn ? `<span class="text-[10px] text-slate-400">Matched in: ${esc(r.matchedIn)}</span>` : ''}
+          ${r.mentionOnly ? '<span class="badge bg-slate-200 text-slate-600" title="Your search matched text in this row, not the shipper or consignee name">Company only mentioned in text</span>' : ''}
+        </div>
+      </td>
+      <td class="min-w-[160px]"><div class="font-medium text-slate-800 link" data-name="${esc(r.dir === 'unknown' ? r.shipper : r.cp)}" title="Filter by this company">${esc(r.cp)}</div><div class="text-[10px] text-slate-400">${r.dir === 'import' ? 'Supplier to this company' : r.dir === 'export' ? 'Customer of this company' : 'Shipper / consignee, role unclear'}</div></td>
+      <td class="max-w-[200px] truncate" title="${esc(r.shipper)}">${esc(r.shipper)}</td>
+      <td class="max-w-[200px] truncate" title="${esc(r.consignee)}">${esc(r.consignee)}</td>
+      <td class="whitespace-nowrap">${esc(r.route)}</td>
+      <td class="text-right num">${r.qty ? fmtInt(r.qty) : ''}</td>
+      <td class="text-right num">${fmtInt(r.weight)}</td>
+      <td class="text-right num">${r.containers ? fmtInt(r.containers) : ''}</td>
+    </tr>`).join('') || '<tr><td colspan="10" class="text-slate-400">No shipments match these filters.</td></tr>';
+    $('detShown').textContent = rs.length ? `Showing ${fmtInt(shown.length)} of ${fmtInt(rs.length)}` : '';
+    $('detMore').classList.toggle('hidden', rs.length <= d.limit);
+  }
+
+  function exportDetCsv() {
+    const v = lastView; if (!v) return;
+    const q = s => { s = String(s ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const head = ['Date', 'Import/export', 'Shipped from', 'Shipped to', 'Port of loading', 'Port of discharge', 'Goods description', 'Goods group', 'Associated company', 'Shipper', 'Consignee', 'Quantity', 'Weight (kg)', 'Containers', 'Matched in', 'Only mentioned in text'];
+    const lines = [head.map(q).join(',')];
+    lastDetRows.forEach(r => lines.push([r.date ? isoDate(r.date) : '', r.dir, r.origin, r.destination, r.portLoad, r.portDis, r.goods, r.gk, r.cp, r.shipper, r.consignee, r.qty, r.weight, r.containers, r.matchedIn, r.mentionOnly ? 'yes' : ''].map(q).join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${v.file.companyName.replace(/[^\w\- ]+/g, '').trim() || 'shipments'}-details.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  /* ---------- banner ---------- */
+  function renderBanner(v) {
+    const total = v.recs.length;
+    const imp = v.recs.filter(r => r.dir === 'import').length, exp = v.recs.filter(r => r.dir === 'export').length, unk = total - imp - exp;
+    let txt = 'No readable arrival dates';
+    if (v.min) {
+      const months = (v.max.getUTCFullYear() - v.min.getUTCFullYear()) * 12 + (v.max.getUTCMonth() - v.min.getUTCMonth()) + 1;
+      txt = `${fmtDate(v.min)} to ${fmtDate(v.max)}, ${months} month${months > 1 ? 's' : ''}, ${fmtInt(total)} shipments`;
+    }
+    if (state.search.trim()) txt += ` matching "${state.search.trim()}"`;
+    $('reportDateRange').textContent = txt;
+    $('dateFormatNote').textContent = `Sheet "${v.file.sheetName}": ${fmtInt(v.file.rowsRead)} shipment rows read. Dates read as: ${v.file.dateNote}${v.file.cols.date ? ` (column "${v.file.cols.date}")` : ''}` +
+      (v.hiddenMentions ? `. ${v.hiddenMentions} row(s) left out where the company is only mentioned in text` : '');
+    const undated = total - v.dated.length;
+    const w = $('undatedWarn');
+    if (undated > 0) {
+      w.classList.remove('hidden');
+      w.textContent = `${undated} row(s) without a readable date${v.file.undatedSample ? `, e.g. "${trunc(v.file.undatedSample, 24)}"` : ''}`;
+    } else w.classList.add('hidden');
+    const lp = lastActivePeriod(v);
+    $('latestNote').classList.toggle('hidden', !lp);
+    if (lp) $('latestNote').textContent = `Latest ${GRAN_ONE[state.gran]} with trade: ${lp.label}`;
+    $('reportSummaryCounts').textContent = `Imports ${fmtInt(imp)} (${pct(imp, total)}%) / Exports ${fmtInt(exp)} (${pct(exp, total)}%)` + (unk ? ` / Unclear ${fmtInt(unk)} (${pct(unk, total)}%)` : '');
+  }
+
+  /* ---------- overview ---------- */
+  function renderOverview(v) {
+    const imp = v.recs.filter(r => r.dir === 'import'), exp = v.recs.filter(r => r.dir === 'export'), unk = v.recs.filter(r => r.dir === 'unknown');
+    const total = v.recs.length;
+    $('statUnknown').textContent = fmtInt(unk.length);
+    $('statUnknownSub').textContent = unk.length ? `${pct(unk.length, total)}% of shipments, still counted everywhere` : 'every shipment has a direction';
+    $('statShipments').textContent = fmtInt(total);
+    $('statShipmentsSub').textContent = `${v.periods.length} ${GRAN_MANY[state.gran]} in span`;
+    $('statWeight').textContent = fmtCompact(sum(v.recs, r => r.weight)) + ' kg';
+    $('statWeightSub').textContent = `${fmtInt(sum(v.recs, r => r.containers))} containers`;
+    $('statImports').textContent = fmtInt(imp.length);
+    $('statImportsSub').textContent = `${pct(imp.length, total)}% of shipments, ${fmtCompact(sum(imp, r => r.weight))} kg`;
+    $('statExports').textContent = fmtInt(exp.length);
+    $('statExportsSub').textContent = `${pct(exp.length, total)}% of shipments, ${fmtCompact(sum(exp, r => r.weight))} kg`;
+
+    const wi = total ? imp.length / total * 100 : 0, we = total ? exp.length / total * 100 : 0, wu = total ? unk.length / total * 100 : 0;
+    $('shareImpLabel').textContent = `Imports ${Math.round(wi)}%`;
+    $('shareExpLabel').textContent = `Exports ${Math.round(we)}%`;
+    $('shareUnkLabel').textContent = unk.length ? `Unclear ${Math.round(wu)}%` : '';
+    $('shareBar').innerHTML = total ? `<div style="width:${wi}%;background:${SKY}"></div><div style="width:${wu}%;background:${GREY}"></div><div style="width:${we}%;background:${AMBER}"></div>` : '';
+
+    renderCompanyCard(v, imp, exp);
+
+    // partners
+    const mv = METRICS[state.metric].val;
+    const cpMap = new Map();
+    v.recs.forEach(r => {
+      const o = cpMap.get(r.cp) || { imp: 0, exp: 0, unk: 0 };
+      o[DK(r.dir)] += mv(r);
+      cpMap.set(r.cp, o);
+    });
+    const tot3 = o => o.imp + o.exp + o.unk;
+    const top = [...cpMap].sort((a, b) => tot3(b[1]) - tot3(a[1])).slice(0, 8);
+    const fmt = METRICS[state.metric].fmt;
+    mkChart('chartPartners', {
+      type: 'bar',
+      data: {
+        labels: top.map(t => trunc(t[0], 28)),
+        datasets: [
+          { label: 'Supplier to company (import)', data: top.map(t => t[1].imp), backgroundColor: SKY, borderRadius: 2 },
+          { label: 'Company to customer (export)', data: top.map(t => t[1].exp), backgroundColor: AMBER, borderRadius: 2 },
+          { label: 'Direction unclear', data: top.map(t => t[1].unk), backgroundColor: GREY, borderRadius: 2 }
+        ]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        scales: { x: { stacked: true, ticks: { callback: x => fmtCompact(x) } }, y: { stacked: true } },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { title: items => top[items[0].dataIndex][0], label: c => `${c.dataset.label}: ${fmt(c.raw)}` } }
+        }
+      }
+    });
+
+    // mirror
+    const { imp: si, exp: se, unk: su } = seriesByDir(v);
+    $('mirrorTitle').textContent = `${METRICS[state.metric].label} per ${GRAN_ONE[state.gran]}: imports above, exports below`;
+    mkChart('chartMirror', mirrorConfig(v, si, se, su));
+
+    // routes
+    const hasRoutes = !!(v.file.cols.origin || v.file.cols.destination);
+    $('routesCard').classList.toggle('hidden', !hasRoutes);
+    if (hasRoutes) {
+      const rm = new Map();
+      v.recs.forEach(r => { const o = rm.get(r.route) || { imp: 0, exp: 0, unk: 0 }; o[DK(r.dir)] += mv(r); rm.set(r.route, o); });
+      const tr = [...rm].sort((a, b) => tot3(b[1]) - tot3(a[1])).slice(0, 10);
+      mkChart('chartRoutes', {
+        type: 'bar',
+        data: { labels: tr.map(t => trunc(t[0], 40)), datasets: [
+          { label: 'Import', data: tr.map(t => t[1].imp), backgroundColor: SKY, borderRadius: 2 },
+          { label: 'Export', data: tr.map(t => t[1].exp), backgroundColor: AMBER, borderRadius: 2 },
+          { label: 'Unclear', data: tr.map(t => t[1].unk), backgroundColor: GREY, borderRadius: 2 }
+        ] },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          scales: { x: { stacked: true, ticks: { callback: x => fmtCompact(x) } }, y: { stacked: true } },
+          plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { title: items => tr[items[0].dataIndex][0], label: c => `${c.dataset.label}: ${fmt(c.raw)}` } } },
+          onClick: (evt, els) => {
+            if (!els.length) return;
+            const [o, d] = tr[els[0].index][0].split(' → ');
+            state.det.origin = o === 'Unknown' ? '' : o; state.det.dest = d === 'Unknown' ? '' : d; state.det.limit = 200;
+            render(); $('detailSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      });
+    }
+  }
+
+  function mirrorConfig(v, imp, exp, unk) {
+    const fmt = METRICS[state.metric].fmt;
+    return {
+      data: {
+        labels: v.periods.map(p => p.label),
+        datasets: [
+          { type: 'bar', label: 'Imports', data: imp, backgroundColor: hl(SKY, SKY_RGB, v), stack: 'd', borderRadius: 2 },
+          { type: 'bar', label: 'Exports', data: exp.map(x => -x), backgroundColor: hl(AMBER, AMBER_RGB, v), stack: 'd', borderRadius: 2 },
+          ...(unk && unk.some(x => x) ? [{ type: 'bar', label: 'Unclear (shown above)', data: unk, backgroundColor: hl(GREY, GREY_RGB, v), stack: 'd', borderRadius: 2 }] : []),
+          { type: 'line', label: 'Net (imports minus exports)', data: imp.map((x, i) => x - exp[i]), borderColor: INK, backgroundColor: INK, pointRadius: 1.5, borderWidth: 1.5, tension: 0.25 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, ...periodClick(v),
+        scales: {
+          x: { stacked: true, ticks: xTicks(v) },
+          y: { stacked: true, ticks: { callback: x => fmtCompact(Math.abs(x)) } }
+        },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.dataset.type === 'line' ? (c.raw < 0 ? '−' : '') + fmt(Math.abs(c.raw)) : fmt(Math.abs(c.raw))}` } }
+        }
+      }
+    };
+  }
+
+  function renderCompanyCard(v, imp, exp) {
+    const side = exp.length > imp.length ? 'Shipper' : 'Consignee';
+    const pool = (side === 'Shipper' ? exp : imp).concat(v.file.recs);
+    const firstVal = key => { for (const r of pool) { const x = r.raw[key]; if (x != null && String(x).trim()) return String(x).trim(); } return ''; };
+    const address = firstVal(`${side} Full Address`) || 'Address not listed';
+    let website = firstVal(`${side} Website 1`);
+    if (website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
+    const email = firstVal(`${side} Email 1`) || 'N/A';
+    const phone = firstVal(`${side} Phone 1`) || 'N/A';
+    const roles = firstVal(`${side} Trade Roles`) || (side === 'Consignee' ? 'Importer' : 'Exporter');
+
+    const ctry = new Map();
+    v.recs.forEach(r => ctry.set(r.cpCountry, (ctry.get(r.cpCountry) || 0) + 1));
+    const topC = [...ctry].sort((a, b) => b[1] - a[1]).slice(0, 3).map(c => c[0]).join(', ');
+    const roleLine = side === 'Consignee' ? 'Mostly appears as the US consignee (buyer)' : 'Mostly appears as the shipper (seller into the US)';
+
+    $('companyCard').innerHTML = `
+      <div class="p-3 bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <div class="min-w-0">
+          <span class="inline-block bg-teal-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full mb-1">${esc(roleLine)}</span>
+          <h2 class="text-base font-bold">${esc(v.file.companyName)}</h2>
+          <p class="text-[11px] text-slate-400 truncate max-w-xl">${esc(address)}</p>
+        </div>
+        ${website ? `<a href="${esc(website)}" target="_blank" rel="noopener" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded text-[11px] font-semibold border border-slate-700 transition">Visit website ↗</a>` : ''}
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-5 divide-x divide-slate-200 bg-white">
+        <div class="p-2.5 min-w-0"><span class="text-[10px] font-semibold text-slate-400">Email</span><p class="font-medium text-slate-800 truncate">${esc(email)}</p></div>
+        <div class="p-2.5 min-w-0"><span class="text-[10px] font-semibold text-slate-400">Phone</span><p class="font-medium text-slate-800 truncate">${esc(phone)}</p></div>
+        <div class="p-2.5 min-w-0"><span class="text-[10px] font-semibold text-slate-400">Trade roles</span><p class="font-medium text-slate-800 truncate" title="${esc(roles)}">${esc(roles)}</p></div>
+        <div class="p-2.5 min-w-0"><span class="text-[10px] font-semibold text-slate-400">Partner countries (${ctry.size})</span><p class="font-medium text-slate-800 truncate" title="${esc(topC)}">${esc(topC || '—')}</p></div>
+        <div class="p-2.5"><span class="text-[10px] font-semibold text-slate-400">Import / export</span><p class="font-medium"><span class="text-sky-600">${fmtInt(imp.length)}</span> / <span class="text-amber-600">${fmtInt(exp.length)}</span>${v.recs.length - imp.length - exp.length ? ` <span class="text-slate-400">(+${fmtInt(v.recs.length - imp.length - exp.length)} unclear)</span>` : ''}</p></div>
+      </div>`;
+  }
+
+  /* ---------- timeline ---------- */
+  function renderTimeline(v) {
+    const { imp, exp, unk } = seriesByDir(v);
+    const labels = v.periods.map(p => p.label);
+    const fmt = METRICS[state.metric].fmt;
+    $('tlTitle').textContent = `${METRICS[state.metric].label} per ${GRAN_ONE[state.gran]}`;
+
+    if (state.tlStyle === 'mirror') {
+      mkChart('chartTimeline', mirrorConfig(v, imp, exp, unk));
+    } else {
+      const stacked = state.tlStyle === 'stacked';
+      const tot = imp.map((x, i) => x + exp[i] + unk[i]);
+      mkChart('chartTimeline', {
+        data: {
+          labels,
+          datasets: [
+            { type: 'bar', label: 'Imports', data: imp, backgroundColor: hl(SKY, SKY_RGB, v), stack: stacked ? 'd' : 'i', borderRadius: 2 },
+            { type: 'bar', label: 'Exports', data: exp, backgroundColor: hl(AMBER, AMBER_RGB, v), stack: stacked ? 'd' : 'e', borderRadius: 2 },
+            ...(unk.some(x => x) ? [{ type: 'bar', label: 'Unclear', data: unk, backgroundColor: hl(GREY, GREY_RGB, v), stack: stacked ? 'd' : 'u', borderRadius: 2 }] : []),
+            { type: 'line', label: '3-period average (total)', data: movingAvg(tot, 3), borderColor: INK, pointRadius: 0, borderWidth: 1.5, tension: 0.3 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, ...periodClick(v),
+          scales: {
+            x: { stacked: true, ticks: xTicks(v) },
+            y: { stacked: true, beginAtZero: true, ticks: { callback: x => fmtCompact(x) } }
+          },
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { callbacks: {
+              label: c => `${c.dataset.label}: ${fmt(c.raw)}`,
+              footer: items => { const i = items[0].dataIndex; return `Total: ${fmt(imp[i] + exp[i] + unk[i])}`; }
+            } }
+          }
+        }
+      });
+    }
+    renderPeriodTable(v);
+  }
+
+  function renderPeriodTable(v) {
+    const agg = v.periods.map(() => ({ imp: 0, exp: 0, unk: 0, w: 0, c: 0, goods: new Map() }));
+    v.dated.forEach(r => {
+      const a = agg[v.idx.get(r.pk)];
+      a[DK(r.dir)]++;
+      a.w += r.weight; a.c += r.containers;
+      a.goods.set(r.gk, (a.goods.get(r.gk) || 0) + 1);
+    });
+    const tbody = document.querySelector('#periodTable tbody');
+    let html = '';
+    for (let i = v.periods.length - 1; i >= 0; i--) {
+      const p = v.periods[i], a = agg[i], t = a.imp + a.exp + a.unk, open = state.expanded === p.key;
+      const topGoods = [...a.goods].sort((x, y) => y[1] - x[1]).slice(0, 2).map(g => `${g[0]} (${g[1]})`).join(', ');
+      html += `<tr class="period-row hover:bg-slate-50 ${t ? '' : 'empty'} ${open ? 'bg-teal-50' : ''}" data-pk="${esc(p.key)}">
+        <td class="font-bold ${t ? 'text-slate-800' : ''}">${t ? (open ? '▾ ' : '▸ ') : '\u00a0\u00a0 '}${esc(p.label)}</td>
+        <td class="text-right num text-sky-700">${a.imp || ''}</td>
+        <td class="text-right num text-amber-700">${a.exp || ''}</td>
+        <td class="text-right num text-slate-500">${a.unk || ''}</td>
+        <td class="text-right num">${t ? `${t}<div class="flex h-1 w-14 rounded overflow-hidden bg-slate-100 ml-auto mt-0.5"><div style="width:${a.imp / t * 100}%;background:${SKY}"></div><div style="width:${a.unk / t * 100}%;background:${GREY}"></div><div style="width:${a.exp / t * 100}%;background:${AMBER}"></div></div>` : '0'}</td>
+        <td class="text-right num">${t ? fmtInt(a.w) + ' kg' : ''}</td>
+        <td class="text-right num">${t ? fmtInt(a.c) : ''}</td>
+        <td class="text-slate-600 truncate max-w-xs" title="${esc(topGoods)}">${t ? esc(topGoods) : 'No shipments'}</td>
+      </tr>`;
+      if (open && t) html += `<tr><td colspan="8" class="bg-slate-50">${periodDetail(v, p.key)}</td></tr>`;
+    }
+    const undated = v.recs.length - v.dated.length;
+    if (undated) html += `<tr class="text-rose-600"><td class="font-bold">No readable date</td><td colspan="7">${undated} shipment(s), listed in the Shipments tab under "No readable date"</td></tr>`;
+    tbody.innerHTML = html || '<tr><td colspan="8" class="text-slate-400">No dated shipments.</td></tr>';
+  }
+
+  function periodDetail(v, pk) {
+    const m = new Map();
+    v.dated.filter(r => r.pk === pk).forEach(r => {
+      const k = r.dir + '|' + r.gk;
+      const o = m.get(k) || { dir: r.dir, gk: r.gk, n: 0, w: 0, cps: new Map(), ctry: new Set(), days: new Set() };
+      o.n++; o.w += r.weight;
+      o.cps.set(r.cp, (o.cps.get(r.cp) || 0) + 1);
+      o.ctry.add(r.route);
+      o.days.add(`${r.date.getUTCDate()} ${MON[r.date.getUTCMonth()]}`);
+      m.set(k, o);
+    });
+    const rows = [...m.values()].sort((a, b) => a.dir.localeCompare(b.dir) * -1 || b.n - a.n);
+    return `<table class="w-full text-[11px] bg-white border border-slate-200 rounded">
+      <thead class="text-slate-500"><tr><th>Direction</th><th>Goods</th><th class="text-right">Shipments</th><th class="text-right">Weight</th><th>Trading partners</th><th>From → to</th><th>Arrival days</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">${rows.map(o => {
+        const cps = [...o.cps].sort((a, b) => b[1] - a[1]);
+        const cpTxt = cps.slice(0, 2).map(c => c[0]).join('; ') + (cps.length > 2 ? ` +${cps.length - 2}` : '');
+        const days = [...o.days];
+        return `<tr>
+          <td>${dirBadge(o.dir)}</td>
+          <td class="font-medium text-slate-800 max-w-[220px] truncate" title="${esc(o.gk)}">${esc(o.gk)}</td>
+          <td class="text-right num">${o.n}</td>
+          <td class="text-right num">${fmtInt(o.w)} kg</td>
+          <td class="max-w-[240px] truncate" title="${esc(cps.map(c => c[0]).join('; '))}">${esc(cpTxt)}</td>
+          <td class="max-w-[220px] truncate" title="${esc([...o.ctry].join('\n'))}">${esc([...o.ctry].join(', '))}</td>
+          <td class="text-slate-500">${esc(days.slice(0, 6).join(', '))}${days.length > 6 ? '…' : ''}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }
+
+  /* ---------- goods x month matrix ---------- */
+  let calRows = [];
+  function cellStyle(i, e, u, max) {
+    const t = i + e + u;
+    if (!t || !max) return '';
+    const a = (0.14 + 0.86 * Math.pow(t / max, 0.6)).toFixed(2);
+    const parts = [[i, SKY_RGB], [u, GREY_RGB], [e, AMBER_RGB]].filter(p => p[0] > 0);
+    let bg;
+    if (parts.length === 1) bg = `rgba(${parts[0][1]},${a})`;
+    else {
+      let acc = 0;
+      bg = 'linear-gradient(90deg, ' + parts.map(([x, rgb]) => { const s0 = acc; acc += x / t * 100; return `rgba(${rgb},${a}) ${s0.toFixed(1)}% ${acc.toFixed(1)}%`; }).join(', ') + ')';
+    }
+    return `background:${bg};color:${a > 0.6 ? '#fff' : '#0f172a'}`;
+  }
+
+  function renderCalendar(v) {
+    const dirF = state.calDir, mv = METRICS[state.metric].val, fmt = METRICS[state.metric].fmt;
+    const n = v.periods.length;
+    const recs = v.dated.filter(r => dirF === 'all' || r.dir === dirF);
+    $('calTitle').textContent = `Goods by ${GRAN_ONE[state.gran]} (${METRICS[state.metric].label.toLowerCase()})`;
+
+    const gm = new Map();
+    const colI = new Array(n).fill(0), colE = new Array(n).fill(0), colU = new Array(n).fill(0);
+    const col = { imp: colI, exp: colE, unk: colU };
+    recs.forEach(r => {
+      let o = gm.get(r.gk);
+      if (!o) { o = { gk: r.gk, imp: new Array(n).fill(0), exp: new Array(n).fill(0), unk: new Array(n).fill(0), tot: 0, first: r.date, last: r.date }; gm.set(r.gk, o); }
+      const i = v.idx.get(r.pk), x = mv(r), k = DK(r.dir);
+      o[k][i] += x; col[k][i] += x;
+      o.tot += x;
+      if (r.date < o.first) o.first = r.date;
+      if (r.date > o.last) o.last = r.date;
+    });
+    const all = [...gm.values()].sort((a, b) => b.tot - a.tot);
+    calRows = state.calTop === 'all' ? all : all.slice(0, +state.calTop);
+
+    let max = 0;
+    calRows.forEach(o => { for (let i = 0; i < n; i++) max = Math.max(max, o.imp[i] + o.exp[i] + o.unk[i]); });
+    let colMax = 0;
+    for (let i = 0; i < n; i++) colMax = Math.max(colMax, colI[i] + colE[i] + colU[i]);
+    const tip = (i, e, u) => `&#10;Imports: ${esc(fmt(i))}&#10;Exports: ${esc(fmt(e))}` + (u ? `&#10;Unclear: ${esc(fmt(u))}` : '');
+
+    const sel = state.calSel || {};
+    const head = `<thead class="sticky top-0 z-10 bg-slate-100"><tr>
+      <th class="sticky-col text-left font-semibold text-slate-600 min-w-[200px]">Goods</th>
+      <th class="text-right font-semibold text-slate-600">Total</th>
+      <th class="text-left font-semibold text-slate-600 whitespace-nowrap">Seen</th>
+      ${v.periods.map(p => `<th class="pcol ${sel.pk === p.key && !sel.gk ? 'sel' : ''}" data-pk="${esc(p.key)}" title="${esc(p.label)}">${esc(p.short)}</th>`).join('')}
+    </tr></thead>`;
+
+    const totRow = `<tr class="bg-slate-50 font-semibold">
+      <td class="sticky-col bg-slate-50 text-slate-800">All goods</td>
+      <td class="text-right num">${fmt(sum(recs, mv))}</td><td></td>
+      ${v.periods.map((p, i) => {
+        const t = colI[i] + colE[i] + colU[i];
+        return `<td class="hm ${sel.pk === p.key && !sel.gk ? 'sel' : ''}" data-gk="" data-pk="${esc(p.key)}" style="${cellStyle(colI[i], colE[i], colU[i], colMax)}" title="${esc(p.label)}${tip(colI[i], colE[i], colU[i])}">${t ? esc(fmtCompact(t)) : ''}</td>`;
+      }).join('')}
+    </tr>`;
+
+    const body = calRows.map(o => `<tr>
+      <td class="sticky-col gname font-medium text-slate-800 max-w-[260px] truncate ${sel.gk === o.gk && !sel.pk ? 'text-teal-700' : ''}" data-gk="${esc(o.gk)}" title="${esc(o.gk)}">${esc(o.gk)}</td>
+      <td class="text-right num">${esc(fmt(o.tot))}</td>
+      <td class="text-[10px] text-slate-500 whitespace-nowrap">${esc(MON[o.first.getUTCMonth()] + ' ' + String(o.first.getUTCFullYear()).slice(2))}–${esc(MON[o.last.getUTCMonth()] + ' ' + String(o.last.getUTCFullYear()).slice(2))}</td>
+      ${v.periods.map((p, i) => {
+        const t = o.imp[i] + o.exp[i] + o.unk[i];
+        const isSel = sel.gk === o.gk && sel.pk === p.key;
+        return `<td class="hm ${isSel ? 'sel' : ''}" data-gk="${esc(o.gk)}" data-pk="${esc(p.key)}" style="${cellStyle(o.imp[i], o.exp[i], o.unk[i], max)}" title="${esc(o.gk)} · ${esc(p.label)}${tip(o.imp[i], o.exp[i], o.unk[i])}">${t ? esc(fmtCompact(t)) : ''}</td>`;
+      }).join('')}
+    </tr>`).join('');
+
+    $('calTable').innerHTML = n ? head + `<tbody>${totRow}${body}</tbody>` : '<tbody><tr><td class="text-slate-400 p-4">No dated shipments to place on the calendar.</td></tr></tbody>';
+    $('calFootnote').textContent = `Showing ${calRows.length} of ${all.length} goods groups across ${n} ${GRAN_MANY[state.gran]}.` +
+      (state.group === 'smart' ? ' Goods are grouped by the first key words of the description; switch "Goods grouping" to Full description for exact text.' : '') +
+      (state.gran === 'week' && n > 60 ? ' Tip: weekly view is wide, scroll sideways or switch to Month.' : '');
+    renderCalDetail(v);
+  }
+
+  function renderCalDetail(v) {
+    const box = $('calDetail'), sel = state.calSel;
+    if (!sel || (!sel.gk && !sel.pk)) { box.classList.add('hidden'); return; }
+    const rs = v.dated.filter(r => (state.calDir === 'all' || r.dir === state.calDir) && (!sel.gk || r.gk === sel.gk) && (!sel.pk || r.pk === sel.pk))
+      .sort((a, b) => a.date - b.date);
+    const imp = rs.filter(r => r.dir === 'import').length, exp = rs.filter(r => r.dir === 'export').length, unk = rs.length - imp - exp;
+    $('calDetailTitle').innerHTML = `${esc(sel.gk || 'All goods')} <span class="text-slate-500 font-normal">in ${esc(sel.pk ? v.plabel.get(sel.pk) || sel.pk : 'all periods')}: ${rs.length} shipment(s), <span class="text-sky-700">${imp} import</span>, <span class="text-amber-700">${exp} export</span>${unk ? `, ${unk} unclear` : ''}</span>`;
+    const shown = rs.slice(0, 500);
+    $('calDetailBody').innerHTML = shown.map(r => `<tr class="hover:bg-slate-50">
+      <td class="num">${fmtDate(r.date)}</td>
+      <td>${dirBadge(r.dir)}</td>
+      <td class="max-w-[360px] truncate" title="${esc(r.goods)}">${esc(r.goods)}</td>
+      <td class="max-w-[220px] truncate" title="${esc(r.cp)}">${esc(r.cp)}</td>
+      <td class="whitespace-nowrap">${esc(r.route)}</td>
+      <td class="text-right num">${fmtInt(r.weight)}</td>
+      <td class="text-right num">${fmtInt(r.containers)}</td>
+    </tr>`).join('') + (rs.length > 500 ? `<tr><td colspan="7" class="text-slate-400">First 500 of ${rs.length} shown. Use the Shipments tab or CSV export for all.</td></tr>` : '') +
+      (!rs.length ? '<tr><td colspan="7" class="text-slate-400">No shipments for this selection.</td></tr>' : '');
+    box.classList.remove('hidden');
+  }
+
+  /* ---------- import vs export ---------- */
+  function dirStats(rs, v) {
+    const goods = new Map(), cps = new Map(), ctry = new Map(), per = new Map();
+    let first = null, last = null;
+    rs.forEach(r => {
+      goods.set(r.gk, (goods.get(r.gk) || 0) + 1);
+      cps.set(r.cp, (cps.get(r.cp) || 0) + 1);
+      ctry.set(r.cpCountry, (ctry.get(r.cpCountry) || 0) + 1);
+      if (r.date) {
+        per.set(r.pk, (per.get(r.pk) || 0) + 1);
+        if (!first || r.date < first) first = r.date;
+        if (!last || r.date > last) last = r.date;
+      }
+    });
+    const top = m => { const t = [...m].sort((a, b) => b[1] - a[1])[0]; return t ? `${t[0]} (${t[1]})` : '—'; };
+    const busiest = [...per].sort((a, b) => b[1] - a[1])[0];
+    const w = sum(rs, r => r.weight);
+    return {
+      n: rs.length, w, avg: rs.length ? w / rs.length : 0, c: sum(rs, r => r.containers),
+      goods: goods.size, cps: cps.size, ctry: ctry.size, active: per.size, first, last,
+      busiest: busiest ? `${v.plabel.get(busiest[0]) || busiest[0]} (${busiest[1]})` : '—',
+      topGoods: top(goods), topCp: top(cps), topCtry: top(ctry)
+    };
+  }
+
+  function renderCompare(v) {
+    const impR = v.recs.filter(r => r.dir === 'import'), expR = v.recs.filter(r => r.dir === 'export');
+    const a = dirStats(impR, v), b = dirStats(expR, v), total = v.recs.length;
+    const unkN = total - impR.length - expR.length;
+    $('compareNote').textContent = unkN ? `${fmtInt(unkN)} shipment(s) with unclear direction are not in this comparison but are counted in totals, charts and the details table.` : '';
+    const rows = [
+      ['Shipments', fmtInt(a.n), fmtInt(b.n)],
+      ['Share of shipments', pct(a.n, total) + '%', pct(b.n, total) + '%'],
+      ['Total weight', fmtCompact(a.w) + ' kg', fmtCompact(b.w) + ' kg'],
+      ['Average weight / shipment', fmtCompact(a.avg) + ' kg', fmtCompact(b.avg) + ' kg'],
+      ['Containers', fmtInt(a.c), fmtInt(b.c)],
+      ['Goods groups', a.goods, b.goods],
+      ['Trading partners', a.cps, b.cps],
+      ['Partner countries', a.ctry, b.ctry],
+      [`Active ${GRAN_MANY[state.gran]} (of ${v.periods.length})`, a.active, b.active],
+      ['First arrival', fmtDate(a.first), fmtDate(b.first)],
+      ['Last arrival', fmtDate(a.last), fmtDate(b.last)],
+      [`Busiest ${GRAN_ONE[state.gran]}`, a.busiest, b.busiest],
+      ['Main goods', a.topGoods, b.topGoods],
+      ['Main partner', a.topCp, b.topCp],
+      ['Main partner country', a.topCtry, b.topCtry]
+    ];
+    document.querySelector('#compareStats tbody').innerHTML = rows.map(r => `<tr>
+      <td class="text-slate-500">${esc(r[0])}</td>
+      <td class="text-right font-medium text-sky-800 max-w-[150px] truncate" title="${esc(r[1])}">${esc(r[1])}</td>
+      <td class="text-right font-medium text-amber-800 max-w-[150px] truncate" title="${esc(r[2])}">${esc(r[2])}</td></tr>`).join('');
+
+    // butterfly
+    const mv = METRICS[state.metric].val, fmt = METRICS[state.metric].fmt;
+    const gm = new Map();
+    v.recs.forEach(r => { const o = gm.get(r.gk) || { i: 0, e: 0 }; o[r.dir === 'import' ? 'i' : 'e'] += mv(r); gm.set(r.gk, o); });
+    const top = [...gm].sort((x, y) => (y[1].i + y[1].e) - (x[1].i + x[1].e)).slice(0, 12);
+    mkChart('chartButterfly', {
+      type: 'bar',
+      data: {
+        labels: top.map(t => trunc(t[0], 26)),
+        datasets: [
+          { label: 'Imports', data: top.map(t => -t[1].i), backgroundColor: SKY, borderRadius: 2 },
+          { label: 'Exports', data: top.map(t => t[1].e), backgroundColor: AMBER, borderRadius: 2 }
+        ]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        scales: { x: { stacked: true, ticks: { callback: x => fmtCompact(Math.abs(x)) } }, y: { stacked: true } },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { title: items => top[items[0].dataIndex][0], label: c => `${c.dataset.label}: ${fmt(Math.abs(c.raw))}` } }
+        }
+      }
+    });
+
+    // mix
+    const { imp, exp, unk } = seriesByDir(v);
+    const T = i => imp[i] + exp[i] + unk[i];
+    const ip = imp.map((x, i) => T(i) ? x / T(i) * 100 : null);
+    const ep = exp.map((x, i) => T(i) ? x / T(i) * 100 : null);
+    const up = unk.map((x, i) => T(i) ? x / T(i) * 100 : null);
+    $('mixTitle').textContent = `Import / export mix per ${GRAN_ONE[state.gran]} (share of ${METRICS[state.metric].label.toLowerCase()})`;
+    mkChart('chartMix', {
+      type: 'bar',
+      data: { labels: v.periods.map(p => p.label), datasets: [
+        { label: 'Imports %', data: ip, backgroundColor: hl(SKY, SKY_RGB, v) },
+        ...(unk.some(x => x) ? [{ label: 'Unclear %', data: up, backgroundColor: hl(GREY, GREY_RGB, v) }] : []),
+        { label: 'Exports %', data: ep, backgroundColor: hl(AMBER, AMBER_RGB, v) }
+      ] },
+      options: {
+        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, ...periodClick(v),
+        scales: { x: { stacked: true, ticks: xTicks(v) }, y: { stacked: true, min: 0, max: 100, ticks: { callback: x => x + '%' } } },
+        plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: {
+          label: c => c.raw == null ? `${c.dataset.label}: no trade` : `${c.dataset.label}: ${Math.round(c.raw)}%`,
+          footer: items => { const i = items[0].dataIndex; return `Imports ${fmt(imp[i])} / Exports ${fmt(exp[i])}`; }
+        } } }
+      }
+    });
+
+    fillGoodsTable('importGoodsTable', 'importGoodsCount', impR, 'import');
+    fillGoodsTable('exportGoodsTable', 'exportGoodsCount', expR, 'export');
+  }
+
+  function fillGoodsTable(tableId, countId, rs, dir) {
+    const m = new Map();
+    rs.forEach(r => {
+      const o = m.get(r.gk) || { n: 0, w: 0, per: new Set(), first: null, last: null };
+      o.n++; o.w += r.weight;
+      if (r.date) { o.per.add(r.pk); if (!o.first || r.date < o.first) o.first = r.date; if (!o.last || r.date > o.last) o.last = r.date; }
+      m.set(r.gk, o);
+    });
+    const rows = [...m].sort((a, b) => b[1].n - a[1].n);
+    $(countId).textContent = `${rows.length} goods groups`;
+    document.querySelector(`#${tableId} tbody`).innerHTML = rows.map(([gk, o]) => `<tr class="clickable-row hover:bg-slate-50" data-gk="${esc(gk)}" data-dir="${dir}">
+      <td class="font-medium text-slate-800 max-w-[240px] truncate" title="${esc(gk)}">${esc(gk)}</td>
+      <td class="text-right num">${o.n}</td>
+      <td class="text-right num">${fmtInt(o.w)}</td>
+      <td class="text-right num">${o.per.size}</td>
+      <td class="whitespace-nowrap">${fmtDate(o.first)}</td>
+      <td class="whitespace-nowrap">${fmtDate(o.last)}</td></tr>`).join('') || '<tr><td colspan="6" class="text-slate-400">None</td></tr>';
+  }
+
+  /* ---------- shipments ---------- */
+  function displayCols(f) {
+    const pick = SHIPMENT_COLUMNS.filter(c => f.headers.includes(c));
+    return pick.length >= 4 ? pick : f.headers.filter(h => h !== f.cols.date);
+  }
+
+  function renderShipments(v) {
+    const ps = $('shipPeriodSel');
+    const counts = new Map();
+    v.recs.forEach(r => { const k = r.pk || '__nodate'; counts.set(k, (counts.get(k) || 0) + 1); });
+    let opts = `<option value="all">All periods</option>`;
+    for (let i = v.periods.length - 1; i >= 0; i--) {
+      const p = v.periods[i], c = counts.get(p.key);
+      if (c) opts += `<option value="${esc(p.key)}">${esc(p.label)} (${c})</option>`;
+    }
+    if (counts.get('__nodate')) opts += `<option value="__nodate">No readable date (${counts.get('__nodate')})</option>`;
+    ps.innerHTML = opts;
+    if (![...ps.options].some(o => o.value === state.shipPeriod)) state.shipPeriod = 'all';
+    ps.value = state.shipPeriod;
+    $('shipDirSel').value = state.shipDir;
+
+    const rs = v.recs.filter(r => (state.shipDir === 'all' || r.dir === state.shipDir) &&
+      (state.shipPeriod === 'all' || (state.shipPeriod === '__nodate' ? !r.date : r.pk === state.shipPeriod)))
+      .sort((a, b) => (b.date ? b.date.getTime() : -Infinity) - (a.date ? a.date.getTime() : -Infinity));
+    lastShipRows = rs;
+
+    const cols = displayCols(v.file);
+    document.querySelector('#shipmentsTable thead').innerHTML = `<tr class="font-semibold border-b border-slate-200">
+      <th>Arrival date</th><th>Period</th><th>Direction</th>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr>`;
+    const LIMIT = 1000;
+    document.querySelector('#shipmentsTable tbody').innerHTML = rs.slice(0, LIMIT).map(r => `<tr class="hover:bg-slate-50">
+      <td class="num">${r.date ? fmtDate(r.date) : `<span class="text-rose-600">${esc(r.raw[v.file.cols.date] || '—')}</span>`}</td>
+      <td>${esc(r.pk ? v.plabel.get(r.pk) : '—')}</td>
+      <td>${dirBadge(r.dir)}</td>
+      ${cols.map(c => { const val = r.raw[c] ?? ''; return `<td class="max-w-xs truncate" title="${esc(val)}">${esc(val)}</td>`; }).join('')}
+    </tr>`).join('');
+    $('shipCount').textContent = `${fmtInt(rs.length)} shipment(s)` + (rs.length > LIMIT ? `, first ${LIMIT} shown (CSV export includes all)` : '');
+  }
+
+  function exportCsv() {
+    const v = lastView; if (!v) return;
+    const cols = displayCols(v.file);
+    const q = s => { s = String(s ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const lines = [['Arrival date (parsed)', 'Period', 'Direction', 'Goods group', ...cols].map(q).join(',')];
+    lastShipRows.forEach(r => lines.push([r.date ? isoDate(r.date) : '', r.pk ? v.plabel.get(r.pk) : '', r.dir, r.gk, ...cols.map(c => r.raw[c])].map(q).join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${v.file.companyName.replace(/[^\w\- ]+/g, '').trim() || 'shipments'}-shipments.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  /* ---------- tabs & controls ---------- */
+  function setTab(t) {
+    state.tab = t;
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      const on = b.dataset.tab === t;
+      b.classList.toggle('border-teal-400', on); b.classList.toggle('text-white', on);
+      b.classList.toggle('border-transparent', !on); b.classList.toggle('text-slate-400', !on);
+    });
+    document.querySelectorAll('.tab-content').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + t));
+    $('detailSection').classList.toggle('hidden', !lastView || !['overview', 'timeline', 'compare'].includes(t));
+    requestAnimationFrame(() => Object.values(charts).forEach(c => c.resize()));
+  }
+
+  function syncSeg(groupId, attr, value) {
+    document.querySelectorAll(`#${groupId} .seg`).forEach(b => b.classList.toggle('active', b.dataset[attr] === value));
+  }
+
+  const dirInput = $('dirInput');
+  $('btnPick').addEventListener('click', () => dirInput.click());
+  $('btnPick2').addEventListener('click', () => dirInput.click());
+  $('btnReload').addEventListener('click', () => lastFiles ? loadFiles(lastFiles) : dirInput.click());
+  dirInput.addEventListener('change', e => {
+    const files = Array.from(e.target.files).filter(f => /\.(xlsx|xls|csv)$/i.test(f.name) && !f.name.startsWith('~$'));
+    dirInput.value = '';
+    if (!files.length) { alert('No Excel or CSV files found in that folder.'); return; }
+    lastFiles = files;
+    loadFiles(files);
+  });
+
+  $('fileSel').addEventListener('change', e => { currentFileKey = e.target.value; resetSelections(); state.det = freshDet(); render(); });
+  document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+
+  $('granGroup').addEventListener('click', e => {
+    const b = e.target.closest('[data-gran]'); if (!b) return;
+    state.gran = b.dataset.gran; syncSeg('granGroup', 'gran', state.gran);
+    resetSelections(); render();
+  });
+  $('metricSel').addEventListener('change', e => { state.metric = e.target.value; render(); });
+  $('groupSel').addEventListener('change', e => { state.group = e.target.value; state.calSel = null; state.expanded = null; render(); });
+  $('dirSel').addEventListener('change', e => { state.dirMode = e.target.value; render(); });
+
+  let searchTimer;
+  $('globalSearch').addEventListener('input', e => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { state.search = e.target.value; state.expanded = null; render(); }, 250);
+  });
+
+  $('tlStyleGroup').addEventListener('click', e => {
+    const b = e.target.closest('[data-tl]'); if (!b) return;
+    state.tlStyle = b.dataset.tl; syncSeg('tlStyleGroup', 'tl', state.tlStyle);
+    renderTimeline(lastView);
+  });
+
+  document.querySelector('#periodTable tbody').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-pk]'); if (!tr || tr.classList.contains('empty')) return;
+    state.expanded = state.expanded === tr.dataset.pk ? null : tr.dataset.pk;
+    state.det.period = state.expanded || 'all';
+    state.det.limit = 200;
+    render();
+  });
+
+  $('calDirGroup').addEventListener('click', e => {
+    const b = e.target.closest('[data-caldir]'); if (!b) return;
+    state.calDir = b.dataset.caldir; syncSeg('calDirGroup', 'caldir', state.calDir);
+    renderCalendar(lastView);
+  });
+  $('calTopSel').addEventListener('change', e => { state.calTop = e.target.value; renderCalendar(lastView); });
+  $('calTable').addEventListener('click', e => {
+    const cell = e.target.closest('td.hm, th.pcol, td.gname'); if (!cell) return;
+    const gk = cell.dataset.gk || null, pk = cell.dataset.pk || null;
+    const same = state.calSel && state.calSel.gk === gk && state.calSel.pk === pk;
+    state.calSel = same ? null : { gk, pk };
+    renderCalendar(lastView);
+    if (state.calSel) $('calDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  $('calDetailClose').addEventListener('click', () => { state.calSel = null; renderCalendar(lastView); });
+
+  ['importGoodsTable', 'exportGoodsTable'].forEach(id => {
+    document.querySelector(`#${id} tbody`).addEventListener('click', e => {
+      const tr = e.target.closest('tr[data-gk]'); if (!tr) return;
+      state.calSel = { gk: tr.dataset.gk, pk: null };
+      state.calDir = tr.dataset.dir; syncSeg('calDirGroup', 'caldir', state.calDir);
+      state.calTop = 'all'; $('calTopSel').value = 'all';
+      renderCalendar(lastView);
+      setTab('calendar');
+      $('calDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+
+  $('shipDirSel').addEventListener('change', e => { state.shipDir = e.target.value; renderShipments(lastView); });
+  $('shipPeriodSel').addEventListener('change', e => { state.shipPeriod = e.target.value; renderShipments(lastView); });
+  $('exportCsv').addEventListener('click', exportCsv);
+
+  $('goodsColSel').addEventListener('change', e => {
+    const f = filesData.get(currentFileKey); if (!f) return;
+    setGoodsCol(f, e.target.value); state.det.gk = null; state.calSel = null; render();
+  });
+  $('latestNote').addEventListener('click', () => {
+    const lp = lastView && lastActivePeriod(lastView); if (!lp) return;
+    state.det.period = lp.key; state.det.limit = 200; render();
+    if (!['overview', 'timeline', 'compare'].includes(state.tab)) setTab('overview');
+    $('detailSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  const detRender = () => { state.det.limit = 200; render(); };
+  $('detDirGroup').addEventListener('click', e => { const b = e.target.closest('[data-ddir]'); if (!b) return; state.det.dir = b.dataset.ddir; detRender(); });
+  $('detPeriodSel').addEventListener('change', e => { state.det.period = e.target.value; detRender(); });
+  $('detLatest').addEventListener('click', () => { const lp = lastView && lastActivePeriod(lastView); if (lp) { state.det.period = lp.key; detRender(); } });
+  $('detFrom').addEventListener('change', e => { state.det.from = e.target.value; if (state.det.to && state.det.from > state.det.to) state.det.to = state.det.from; detRender(); });
+  $('detTo').addEventListener('change', e => { state.det.to = e.target.value; if (state.det.from && state.det.to < state.det.from) state.det.from = state.det.to; detRender(); });
+  let detTimer;
+  ['detName', 'detGoods'].forEach(id => $(id).addEventListener('input', e => {
+    clearTimeout(detTimer);
+    detTimer = setTimeout(() => { state.det[id === 'detName' ? 'name' : 'goods'] = e.target.value; state.det.limit = 200; renderDetail(lastView); }, 250);
+  }));
+  $('detClear').addEventListener('click', () => { state.det = freshDet(); render(); });
+  $('detCsv').addEventListener('click', exportDetCsv);
+  $('detOrigin').addEventListener('change', e => { state.det.origin = e.target.value; detRender(); });
+  $('detDest').addEventListener('change', e => { state.det.dest = e.target.value; detRender(); });
+  $('mentionSel').addEventListener('change', e => { state.mentions = e.target.value; render(); });
+  $('detMore').addEventListener('click', () => { state.det.limit += 200; renderDetail(lastView); });
+  $('detChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-chip]'); if (!b) return;
+    const d = state.det, k = b.dataset.chip;
+    if (k === 'dir') d.dir = 'all'; else if (k === 'period') d.period = 'all';
+    else if (k === 'dates') { d.from = ''; d.to = ''; } else if (k === 'gk') d.gk = null; else d[k] = '';
+    // origin / dest chips reset to '' via the generic branch above
+    detRender();
+  });
+  document.querySelector('#detTable thead').addEventListener('click', e => {
+    const th = e.target.closest('[data-sort]'); if (!th) return;
+    const d = state.det;
+    if (d.sort === th.dataset.sort) d.sortDir = d.sortDir === 'asc' ? 'desc' : 'asc';
+    else { d.sort = th.dataset.sort; d.sortDir = ['date', 'qty', 'weight', 'containers'].includes(d.sort) ? 'desc' : 'asc'; }
+    renderDetail(lastView);
+  });
+  document.querySelector('#detTable tbody').addEventListener('click', e => {
+    const el = e.target.closest('[data-day],[data-gk],[data-name]'); if (!el) return;
+    const d = state.det;
+    if (el.dataset.day) { d.from = d.to = el.dataset.day; d.period = 'all'; }
+    else if (el.dataset.gk) d.gk = el.dataset.gk;
+    else if (el.dataset.name) d.name = el.dataset.name;
+    detRender();
+  });
+  document.querySelector('#detGoodsTable tbody').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-gk]'); if (!tr) return;
+    state.det.gk = state.det.gk === tr.dataset.gk ? null : tr.dataset.gk; detRender();
+  });
+
+  setTab('overview');
+})();
+</script>
+</body>
+</html>
